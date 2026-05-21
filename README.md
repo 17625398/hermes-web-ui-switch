@@ -16,25 +16,25 @@ cd hermes-web-ui-switch
 ```powershell
 # 复制连接设置组件
 copy "packages/client/src/components/hermes/settings/ConnectionSettings.vue" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\components\hermes\settings\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\settings\"
 
 # 复制设置页面视图
 copy "packages/client/src/views/hermes/SettingsView.vue" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\views\hermes\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\views\hermes\"
 
 # 复制中文翻译文件
 copy "packages/client/src/i18n/locales/zh.ts" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 
 # 复制英文翻译文件
 copy "packages/client/src/i18n/locales/en.ts" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 ```
 
 ### 3. 运行 Hermes Web UI
 
 ```bash
-cd D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui
+cd <HERMES_WEB_UI_DIR>
 npm install
 npm run dev
 ```
@@ -49,7 +49,7 @@ npm run dev
 
 ```bash
 # 在 Hermes Web UI 目录下创建 .env 文件
-cd D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui
+cd <HERMES_WEB_UI_DIR>
 copy .env.example .env
 ```
 
@@ -70,12 +70,31 @@ HERMES_GATEWAY_URL=http://your-server-ip:8642
 | 环境变量 | 说明 | 默认值 |
 |----------|------|--------|
 | `HERMES_GATEWAY_URL` | 远程 hermes-agent gateway 地址 | 空（本地模式） |
+| `HERMES_GATEWAY_API_KEY` | 远程 agent 的 API Key，必须与 agent 端的 `API_SERVER_KEY` 一致 | 空 |
 | `PORT` | Web UI 服务端口 | 8648 |
 | `AUTH_TOKEN` | 认证 Token（如果 agent 需要） | 空 |
 | `HERMES_WEB_UI_HOME` | Web UI 数据目录 | 系统默认 |
 | `HERMES_WEB_UI_STOP_GATEWAYS_ON_SHUTDOWN` | 关闭 Web UI 时是否停止 gateway | 1 |
 
+设置 `HERMES_GATEWAY_URL` 后，Web UI 将：
+- 跳过本地 agent bridge 启动
+- 所有 API 请求代理到远程 agent
+- 聊天功能通过 HTTP API 直接与远程 agent 通信
+
 > **注意**：环境变量配置是初始默认值，用户仍可通过设置页面的「连接」标签页在运行时动态切换部署模式。
+
+### 6. 通过 UI 切换部署模式
+
+Web UI 设置页面提供了**连接**标签页，可在运行时动态切换本地/分离部署模式：
+
+1. 打开 Web UI，进入**设置**页面
+2. 点击**连接**标签页
+3. 选择部署模式：
+   - **本地模式**：Web UI 自动启动本地 agent bridge
+   - **分离部署**：输入远程服务器地址和 API Key
+4. 点击**保存**生效
+
+> **提示**：通过 `.env` 配置的远程地址会作为默认值加载，但仍可在 UI 中临时覆盖。
 
 ## 项目简介
 
@@ -142,19 +161,19 @@ D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\
 ```powershell
 # 复制连接设置组件
 copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\components\hermes\settings\ConnectionSettings.vue" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\components\hermes\settings\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\settings\"
 
 # 复制设置页面视图
 copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\views\hermes\SettingsView.vue" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\views\hermes\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\views\hermes\"
 
 # 复制中文翻译文件
 copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\i18n\locales\zh.ts" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 
 # 复制英文翻译文件
 copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\i18n\locales\en.ts" `
-     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+     "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 ```
 
 ### 步骤 3：重启服务
