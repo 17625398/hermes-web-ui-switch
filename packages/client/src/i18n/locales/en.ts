@@ -960,6 +960,10 @@ export default {
       switchToLocal: 'Switched to local mode',
       switchToRemote: 'Switched to remote mode',
       urlRequired: 'Please enter server URL',
+      testConnection: 'Test Connection',
+      testSuccess: 'Connection test successful',
+      testFailed: 'Connection test failed',
+      testError: 'Connection test error',
     },
   },
 

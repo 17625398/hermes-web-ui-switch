@@ -13,6 +13,9 @@ const apiKey = ref("");
 const showApiKey = ref(false);
 const cliStatus = ref<{ hermes_cli_available: boolean; message?: string } | null>(null);
 const cliStatusLoading = ref(true);
+const testConnectionLoading = ref(false);
+const testConnectionResult = ref<'success' | 'error' | null>(null);
+const testConnectionMessage = ref("");
 
 const isRemote = computed(() => deployMode.value === "remote");
 
@@ -137,6 +140,68 @@ function handleApiKeySave() {
   message.success(t("settings.saved"));
   console.log('[ConnectionSettings] handleApiKeySave - success message shown');
 }
+
+async function testConnection() {
+  console.log('[ConnectionSettings] testConnection - called');
+  
+  if (!serverUrl.value.trim()) {
+    console.log('[ConnectionSettings] testConnection - validation failed: empty URL');
+    message.error(t("settings.connection.urlRequired"));
+    return;
+  }
+
+  let url = serverUrl.value.trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "http://" + url;
+  }
+  url = url.replace(/\/+$/, "");
+
+  testConnectionLoading.value = true;
+  testConnectionResult.value = null;
+  testConnectionMessage.value = "";
+
+  try {
+    console.log('[ConnectionSettings] testConnection - testing URL:', url);
+    
+    const testUrl = `${url}/api/hermes/v1/health`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (apiKey.value.trim()) {
+      headers['Authorization'] = `Bearer ${apiKey.value.trim()}`;
+      console.log('[ConnectionSettings] testConnection - using API key');
+    }
+
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      headers: headers,
+      timeout: 10000,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[ConnectionSettings] testConnection - success:', data);
+      testConnectionResult.value = 'success';
+      testConnectionMessage.value = t("settings.connection.testSuccess");
+      message.success(t("settings.connection.testSuccess"));
+    } else {
+      const text = await response.text().catch(() => '');
+      console.error('[ConnectionSettings] testConnection - failed:', response.status, text);
+      testConnectionResult.value = 'error';
+      testConnectionMessage.value = `${t("settings.connection.testFailed")}: ${response.status} - ${text || response.statusText}`;
+      message.error(testConnectionMessage.value);
+    }
+  } catch (error: any) {
+    console.error('[ConnectionSettings] testConnection - error:', error);
+    testConnectionResult.value = 'error';
+    testConnectionMessage.value = `${t("settings.connection.testError")}: ${error.message || 'Unknown error'}`;
+    message.error(testConnectionMessage.value);
+  } finally {
+    testConnectionLoading.value = false;
+    console.log('[ConnectionSettings] testConnection - completed');
+  }
+}
 </script>
 
 <template>
@@ -198,6 +263,28 @@ function handleApiKeySave() {
         <NButton type="primary" size="small" @click="handleApiKeySave">
           {{ t("common.save") }}
         </NButton>
+      </div>
+
+      <div class="test-section">
+        <div class="test-actions">
+          <NButton 
+            type="success" 
+            size="small" 
+            :loading="testConnectionLoading"
+            @click="testConnection"
+          >
+            {{ t("settings.connection.testConnection") }}
+          </NButton>
+        </div>
+        <div v-if="testConnectionMessage" class="test-result">
+          <NAlert 
+            :type="testConnectionResult === 'success' ? 'success' : 'error'" 
+            :closable="true"
+            class="test-alert"
+          >
+            {{ testConnectionMessage }}
+          </NAlert>
+        </div>
       </div>
     </template>
 
@@ -277,6 +364,27 @@ function handleApiKeySave() {
 
 .cli-warning {
   margin-bottom: 12px;
+}
+
+.test-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $border-light;
+}
+
+.test-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.test-result {
+  margin-top: 8px;
+}
+
+.test-alert {
+  margin-bottom: 0;
 }
 
 @media (max-width: $breakpoint-mobile) {

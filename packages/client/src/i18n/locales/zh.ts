@@ -952,6 +952,10 @@ export default {
       switchToLocal: '已切换到本地模式',
       switchToRemote: '已切换到分离部署模式',
       urlRequired: '请输入服务器地址',
+      testConnection: '测试连接',
+      testSuccess: '连接测试成功',
+      testFailed: '连接测试失败',
+      testError: '连接测试错误',
     },
   },
 
