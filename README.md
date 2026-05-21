@@ -1,5 +1,82 @@
 # hermes-web-ui-switch
 
+## 快速开始
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/17625398/hermes-web-ui-switch.git
+cd hermes-web-ui-switch
+```
+
+### 2. 应用修改到 Hermes Web UI
+
+将本项目的代码文件复制到 Hermes Web UI 的对应位置：
+
+```powershell
+# 复制连接设置组件
+copy "packages/client/src/components/hermes/settings/ConnectionSettings.vue" `
+     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\components\hermes\settings\"
+
+# 复制设置页面视图
+copy "packages/client/src/views/hermes/SettingsView.vue" `
+     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\views\hermes\"
+
+# 复制中文翻译文件
+copy "packages/client/src/i18n/locales/zh.ts" `
+     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+
+# 复制英文翻译文件
+copy "packages/client/src/i18n/locales/en.ts" `
+     "D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui\packages\client\src\i18n\locales\"
+```
+
+### 3. 运行 Hermes Web UI
+
+```bash
+cd D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui
+npm install
+npm run dev
+```
+
+### 4. 访问设置页面
+
+打开浏览器访问 Web UI，进入「设置」页面，即可看到新增的「连接」标签页。
+
+### 5. 环境变量配置（可选）
+
+可以通过 `.env` 文件配置默认的远程服务器地址：
+
+```bash
+# 在 Hermes Web UI 目录下创建 .env 文件
+cd D:\Doubao\DeepTutor\data\user\integrations\hermes-web-ui
+copy .env.example .env
+```
+
+编辑 `.env` 文件，设置远程服务器地址：
+
+```env
+# 分离部署配置
+# 设置此项后，Web UI 将默认连接到远程 agent
+HERMES_GATEWAY_URL=http://your-server-ip:8642
+
+# 其他可选配置
+# PORT=8648
+# AUTH_TOKEN=your-token-here
+```
+
+**配置说明：**
+
+| 环境变量 | 说明 | 默认值 |
+|----------|------|--------|
+| `HERMES_GATEWAY_URL` | 远程 hermes-agent gateway 地址 | 空（本地模式） |
+| `PORT` | Web UI 服务端口 | 8648 |
+| `AUTH_TOKEN` | 认证 Token（如果 agent 需要） | 空 |
+| `HERMES_WEB_UI_HOME` | Web UI 数据目录 | 系统默认 |
+| `HERMES_WEB_UI_STOP_GATEWAYS_ON_SHUTDOWN` | 关闭 Web UI 时是否停止 gateway | 1 |
+
+> **注意**：环境变量配置是初始默认值，用户仍可通过设置页面的「连接」标签页在运行时动态切换部署模式。
+
 ## 项目简介
 
 **hermes-web-ui-switch** 是 Hermes Web UI 的延伸功能项目，提供在运行时动态切换**本地/分离部署模式**的能力。
