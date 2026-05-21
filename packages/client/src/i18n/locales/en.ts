@@ -963,6 +963,7 @@ export default {
       testConnection: 'Test Connection',
       testSuccess: 'Connection test successful',
       testFailed: 'Connection test failed',
+      pageRefresh: 'Page will refresh automatically...',
       testError: 'Connection test error',
     },
   },

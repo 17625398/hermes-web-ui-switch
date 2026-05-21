@@ -122,8 +122,13 @@ function handleUrlSave() {
   console.log('[ConnectionSettings] handleUrlSave - setServerUrl called');
   console.log('[ConnectionSettings] handleUrlSave - verify localStorage:', getBaseUrlValue());
 
-  message.success(t("settings.saved"));
+  message.success(t("settings.saved") + ' ' + t("settings.connection.pageRefresh"));
   console.log('[ConnectionSettings] handleUrlSave - success message shown');
+  
+  // 刷新页面使配置生效
+  setTimeout(() => {
+    window.location.reload();
+  }, 1000);
 }
 
 function handleApiKeySave() {

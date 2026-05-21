@@ -3,11 +3,18 @@ import router from '@/router'
 const DEFAULT_BASE_URL = ''
 
 function getBaseUrl(): string {
-  // 在开发模式下，强制使用 Vite 代理，不受 localStorage 影响
+  // 获取 localStorage 中的配置
+  const storedUrl = localStorage.getItem('hermes_server_url')
+  
+  // 在开发模式下：
+  // 1. 如果用户在设置页面配置了远程地址，使用相对路径让 Vite 代理处理
+  // 2. 如果用户选择本地模式（无配置），同样使用相对路径
   if (import.meta.env.DEV) {
     return ''
   }
-  return localStorage.getItem('hermes_server_url') || DEFAULT_BASE_URL
+  
+  // 生产模式下：使用 localStorage 中的配置或默认值
+  return storedUrl || DEFAULT_BASE_URL
 }
 
 export function getApiKey(): string {

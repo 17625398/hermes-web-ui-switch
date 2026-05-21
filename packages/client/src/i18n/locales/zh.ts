@@ -956,6 +956,7 @@ export default {
       testSuccess: '连接测试成功',
       testFailed: '连接测试失败',
       testError: '连接测试错误',
+      pageRefresh: '页面将自动刷新...',
     },
   },
 
