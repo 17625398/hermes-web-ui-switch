@@ -17,6 +17,11 @@ function getBaseUrl(): string {
   return storedUrl || DEFAULT_BASE_URL
 }
 
+export function getBaseUrlValue(): string {
+  // 返回 localStorage 中存储的服务器地址（用于显示）
+  return localStorage.getItem('hermes_server_url') || ''
+}
+
 export function getApiKey(): string {
   return localStorage.getItem('hermes_api_key') || ''
 }
