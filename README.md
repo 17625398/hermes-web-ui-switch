@@ -167,9 +167,13 @@ backup/hermes-web-ui-switch/
     │       │   ├── client.ts         # API 客户端配置
     │       │   └── hermes/
     │       │       ├── chat.ts       # Socket.IO 连接（直连 Koa 后端）
-    │       │       └── group-chat.ts # 群聊 Socket.IO 连接
-    │       ├── components/hermes/settings/
-    │       │   └── ConnectionSettings.vue
+    │       │       ├── group-chat.ts # 群聊 Socket.IO 连接
+    │       │       └── kanban.ts     # 看板事件 WebSocket 连接（直连 Koa 后端）
+    │       ├── components/hermes/
+    │       │   ├── settings/
+    │       │   │   └── ConnectionSettings.vue
+    │       │   └── chat/
+    │       │       └── TerminalPanel.vue  # 终端 WebSocket（直连 Koa 后端）
     │       ├── views/hermes/
     │       │   └── SettingsView.vue
     │       └── i18n/locales/
@@ -195,6 +199,8 @@ backup/hermes-web-ui-switch/
 | client.ts | `packages/client/src/api/` | API 客户端配置，包含开发模式代理和服务器地址管理 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 连接设置组件，包含本地/分离部署模式切换功能 |
 | SettingsView.vue | `packages/client/src/views/hermes/` | 设置页面主视图，包含连接标签页配置 |
+| kanban.ts | `packages/client/src/api/hermes/` | 看板事件 WebSocket 连接，dev 模式直连 Koa（远程 Agent 无此端点） |
+| TerminalPanel.vue | `packages/client/src/components/hermes/chat/` | 终端 WebSocket 连接，dev 模式直连 Koa |
 | zh.ts | `packages/client/src/i18n/locales/` | 中文国际化翻译文件 |
 | en.ts | `packages/client/src/i18n/locales/` | 英文国际化翻译文件 |
 | .env.example | 项目根目录 | 环境变量模板，更新了架构说明 |
@@ -326,12 +332,16 @@ copy "<BACKUP_DIR>\packages\client\src\api\hermes\chat.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\api\hermes\group-chat.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\hermes\"
+copy "<BACKUP_DIR>\packages\client\src\api\hermes\kanban.ts" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\api\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\api\client.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\"
 copy "<BACKUP_DIR>\packages\client\src\main.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\"
 copy "<BACKUP_DIR>\packages\client\src\components\hermes\settings\ConnectionSettings.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\settings\"
+copy "<BACKUP_DIR>\packages\client\src\components\hermes\chat\TerminalPanel.vue" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\chat\"
 copy "<BACKUP_DIR>\packages\client\src\views\hermes\SettingsView.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\views\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\i18n\locales\zh.ts" `
