@@ -58,7 +58,6 @@ function handleModeChange(mode: "local" | "remote") {
     console.log('[ConnectionSettings] handleModeChange - cleared serverUrl from:', oldUrl, 'to empty');
     console.log('[ConnectionSettings] handleModeChange - localStorage hermes_server_url now:', getBaseUrlValue());
     
-    // Check if hermes CLI is available when switching to local mode
     if (cliStatus.value && !cliStatus.value.hermes_cli_available) {
       message.warning(t("settings.connection.localModeCliMissing"));
       console.log('[ConnectionSettings] Warning: Local mode selected but hermes CLI not available');
@@ -70,8 +69,24 @@ function handleModeChange(mode: "local" | "remote") {
     console.log('[ConnectionSettings] handleModeChange - switching to REMOTE mode');
     console.log('[ConnectionSettings] handleModeChange - serverUrl input value:', serverUrl.value);
     console.log('[ConnectionSettings] handleModeChange - apiKey input value:', apiKey.value ? 'yes (masked)' : 'no');
-    message.info(t("settings.connection.switchToRemote"));
-    console.log('[ConnectionSettings] handleModeChange - info message shown');
+    
+    if (serverUrl.value.trim()) {
+      let url = serverUrl.value.trim();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "http://" + url;
+      }
+      url = url.replace(/\/+$/, "");
+      setServerUrl(url);
+      console.log('[ConnectionSettings] handleModeChange - auto-saved serverUrl:', url);
+    }
+    
+    if (apiKey.value.trim()) {
+      setApiKey(apiKey.value.trim());
+      console.log('[ConnectionSettings] handleModeChange - auto-saved apiKey');
+    }
+    
+    message.success(t("settings.connection.switchToRemote"));
+    console.log('[ConnectionSettings] handleModeChange - success message shown');
   }
 
   console.log('[ConnectionSettings] handleModeChange - final deployMode:', deployMode.value);
