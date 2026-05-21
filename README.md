@@ -151,7 +151,7 @@ backup/hermes-web-ui-switch/
 
 确保备份目录存在：
 ```
-D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\
+<BACKUP_DIR>\
 ```
 
 ### 步骤 2：复制备份文件
@@ -160,19 +160,19 @@ D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\
 
 ```powershell
 # 复制连接设置组件
-copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\components\hermes\settings\ConnectionSettings.vue" `
+copy "<BACKUP_DIR>\packages\client\src\components\hermes\settings\ConnectionSettings.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\settings\"
 
 # 复制设置页面视图
-copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\views\hermes\SettingsView.vue" `
+copy "<BACKUP_DIR>\packages\client\src\views\hermes\SettingsView.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\views\hermes\"
 
 # 复制中文翻译文件
-copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\i18n\locales\zh.ts" `
+copy "<BACKUP_DIR>\packages\client\src\i18n\locales\zh.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 
 # 复制英文翻译文件
-copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\i18n\locales\en.ts" `
+copy "<BACKUP_DIR>\packages\client\src\i18n\locales\en.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\i18n\locales\"
 ```
 
@@ -185,7 +185,7 @@ copy "D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\packages\client\src\i18n\l
 如需创建新的备份，运行备份脚本：
 
 ```powershell
-cd D:\Doubao\DeepTutor\backup\hermes-web-ui-switch
+cd <BACKUP_DIR>
 .\backup.ps1
 ```
 
@@ -201,4 +201,4 @@ cd D:\Doubao\DeepTutor\backup\hermes-web-ui-switch
 - **项目名称**: hermes-web-ui-switch
 - **所属项目**: Hermes Web UI
 - **功能定位**: 部署模式切换扩展功能
-- **备份目录**: `D:\Doubao\DeepTutor\backup\hermes-web-ui-switch\`
+- **备份目录**: `<BACKUP_DIR>\`
