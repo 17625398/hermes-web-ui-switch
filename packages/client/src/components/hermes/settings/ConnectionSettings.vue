@@ -152,34 +152,41 @@ function handleApiKeySave() {
 
 async function testConnection() {
   console.log('[ConnectionSettings] testConnection - called');
-  
-  if (!serverUrl.value.trim()) {
-    console.log('[ConnectionSettings] testConnection - validation failed: empty URL');
-    message.error(t("settings.connection.urlRequired"));
-    return;
-  }
-
-  let url = serverUrl.value.trim();
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    url = "http://" + url;
-  }
-  url = url.replace(/\/+$/, "");
 
   testConnectionLoading.value = true;
   testConnectionResult.value = null;
   testConnectionMessage.value = "";
 
   try {
-    console.log('[ConnectionSettings] testConnection - testing URL:', url);
-    
-    const testUrl = `${url}/api/hermes/v1/health`;
+    let testUrl: string;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    if (apiKey.value.trim()) {
-      headers['Authorization'] = `Bearer ${apiKey.value.trim()}`;
-      console.log('[ConnectionSettings] testConnection - using API key');
+    if (isRemote.value) {
+      // 远程模式：测试远程服务器
+      if (!serverUrl.value.trim()) {
+        console.log('[ConnectionSettings] testConnection - validation failed: empty URL');
+        message.error(t("settings.connection.urlRequired"));
+        return;
+      }
+
+      let url = serverUrl.value.trim();
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = "http://" + url;
+      }
+      url = url.replace(/\/+$/, "");
+      testUrl = `${url}/api/hermes/v1/health`;
+
+      if (apiKey.value.trim()) {
+        headers['Authorization'] = `Bearer ${apiKey.value.trim()}`;
+        console.log('[ConnectionSettings] testConnection - using API key');
+      }
+      console.log('[ConnectionSettings] testConnection - testing remote URL:', testUrl);
+    } else {
+      // 本地模式：测试本地服务
+      testUrl = '/api/cli-status';
+      console.log('[ConnectionSettings] testConnection - testing local CLI status');
     }
 
     const response = await fetch(testUrl, {
@@ -192,8 +199,16 @@ async function testConnection() {
       const data = await response.json();
       console.log('[ConnectionSettings] testConnection - success:', data);
       testConnectionResult.value = 'success';
-      testConnectionMessage.value = t("settings.connection.testSuccess");
-      message.success(t("settings.connection.testSuccess"));
+      
+      if (isRemote.value) {
+        testConnectionMessage.value = t("settings.connection.testSuccess");
+        message.success(t("settings.connection.testSuccess"));
+      } else {
+        testConnectionMessage.value = data.hermes_cli_available 
+          ? t("settings.connection.testSuccess") + ' - Hermes CLI 可用'
+          : t("settings.connection.testFailed") + ' - Hermes CLI 不可用';
+        message[data.hermes_cli_available ? 'success' : 'warning'](testConnectionMessage.value);
+      }
     } else {
       const text = await response.text().catch(() => '');
       console.error('[ConnectionSettings] testConnection - failed:', response.status, text);
@@ -274,28 +289,6 @@ async function testConnection() {
         </NButton>
       </div>
 
-      <div class="test-section" v-show="isRemote">
-        <div class="test-actions">
-          <NButton 
-            type="success" 
-            size="small" 
-            :loading="testConnectionLoading"
-            @click="testConnection"
-            :disabled="!serverUrl.trim()"
-          >
-            {{ t("settings.connection.testConnection") }}
-          </NButton>
-        </div>
-        <div v-if="testConnectionMessage" class="test-result">
-          <NAlert 
-            :type="testConnectionResult === 'success' ? 'success' : 'error'" 
-            :closable="true"
-            class="test-alert"
-          >
-            {{ testConnectionMessage }}
-          </NAlert>
-        </div>
-      </div>
     </template>
 
     <div v-else>
@@ -306,6 +299,30 @@ async function testConnection() {
       </div>
       <div class="local-hint">
         {{ t("settings.connection.localHint") }}
+      </div>
+    </div>
+
+    <!-- 测试连接按钮 - 在本地和远程模式下都显示 -->
+    <div class="test-section">
+      <div class="test-actions">
+        <NButton 
+          type="success" 
+          size="small" 
+          :loading="testConnectionLoading"
+          @click="testConnection"
+          :disabled="isRemote && !serverUrl.trim()"
+        >
+          {{ t("settings.connection.testConnection") }}
+        </NButton>
+      </div>
+      <div v-if="testConnectionMessage" class="test-result">
+        <NAlert 
+          :type="testConnectionResult === 'success' ? 'success' : 'error'" 
+          :closable="true"
+          class="test-alert"
+        >
+          {{ testConnectionMessage }}
+        </NAlert>
       </div>
     </div>
   </section>
