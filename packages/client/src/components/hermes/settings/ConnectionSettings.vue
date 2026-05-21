@@ -274,13 +274,14 @@ async function testConnection() {
         </NButton>
       </div>
 
-      <div class="test-section">
+      <div class="test-section" v-show="isRemote">
         <div class="test-actions">
           <NButton 
             type="success" 
             size="small" 
             :loading="testConnectionLoading"
             @click="testConnection"
+            :disabled="!serverUrl.trim()"
           >
             {{ t("settings.connection.testConnection") }}
           </NButton>

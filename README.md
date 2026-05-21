@@ -126,6 +126,8 @@ backup/hermes-web-ui-switch/
 └── packages/
     └── client/
         └── src/
+            ├── api/
+            │   └── client.ts           # API 客户端配置
             ├── components/
             │   └── hermes/
             │       └── settings/
@@ -143,6 +145,7 @@ backup/hermes-web-ui-switch/
 
 | 文件 | 路径 | 说明 |
 |------|------|------|
+| client.ts | `packages/client/src/api/` | API 客户端配置，包含开发模式代理和服务器地址管理 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 连接设置组件，包含本地/分离部署模式切换功能 |
 | SettingsView.vue | `packages/client/src/views/hermes/` | 设置页面主视图，包含连接标签页配置 |
 | zh.ts | `packages/client/src/i18n/locales/` | 中文国际化翻译文件（含连接设置相关翻译） |
