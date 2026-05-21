@@ -41,8 +41,10 @@ onMounted(async () => {
   console.log('[ConnectionSettings] onMounted - deployMode set to:', deployMode.value);
   console.log('[ConnectionSettings] onMounted - apiKey loaded:', apiKey.value ? 'yes (masked)' : 'no');
   
-  // Fetch CLI status to check if local mode is supported
-  await fetchCliStatus();
+  // Fetch CLI status only in local mode (remote servers don't have this endpoint)
+  if (deployMode.value === "local") {
+    await fetchCliStatus();
+  }
 });
 
 function handleModeChange(mode: "local" | "remote") {
@@ -60,6 +62,8 @@ function handleModeChange(mode: "local" | "remote") {
     setServerUrl("");
     console.log('[ConnectionSettings] handleModeChange - cleared serverUrl from:', oldUrl, 'to empty');
     console.log('[ConnectionSettings] handleModeChange - localStorage hermes_server_url now:', getBaseUrlValue());
+    
+    await fetchCliStatus();
     
     if (cliStatus.value && !cliStatus.value.hermes_cli_available) {
       message.warning(t("settings.connection.localModeCliMissing"));
