@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { NSelect, NInput, NButton, useMessage, NAlert } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { setServerUrl, getBaseUrlValue, setApiKey, getApiKey, clearApiKey, request } from "@/api/client";
+import { useAppStore } from "@/stores/hermes/app";
 
 const { t } = useI18n();
 const message = useMessage();
+const appStore = useAppStore();
 
-const deployMode = ref<"local" | "remote">("local");
 const serverUrl = ref("");
 const apiKey = ref("");
 const showApiKey = ref(false);
@@ -16,8 +17,6 @@ const cliStatusLoading = ref(true);
 const testConnectionLoading = ref(false);
 const testConnectionResult = ref<'success' | 'error' | null>(null);
 const testConnectionMessage = ref("");
-
-const isRemote = computed(() => deployMode.value === "remote");
 
 async function fetchCliStatus() {
   try {
@@ -33,68 +32,44 @@ async function fetchCliStatus() {
 }
 
 onMounted(async () => {
-  const url = getBaseUrlValue();
-  console.log('[ConnectionSettings] onMounted - initial URL from localStorage:', url);
-  serverUrl.value = url;
-  deployMode.value = url ? "remote" : "local";
+  appStore.syncDeployMode();
+  serverUrl.value = getBaseUrlValue();
   apiKey.value = getApiKey();
-  console.log('[ConnectionSettings] onMounted - deployMode set to:', deployMode.value);
-  console.log('[ConnectionSettings] onMounted - apiKey loaded:', apiKey.value ? 'yes (masked)' : 'no');
+  console.log('[ConnectionSettings] onMounted - deployMode:', appStore.deployMode, 'serverUrl:', serverUrl.value);
   
-  // Fetch CLI status only in local mode (remote servers don't have this endpoint)
-  if (deployMode.value === "local") {
+  if (appStore.deployMode === "local") {
     await fetchCliStatus();
   }
 });
 
 async function handleModeChange(mode: "local" | "remote") {
-  console.log('[ConnectionSettings] handleModeChange - called with mode:', mode);
-  console.log('[ConnectionSettings] handleModeChange - previous mode:', deployMode.value);
-  console.log('[ConnectionSettings] handleModeChange - current serverUrl:', serverUrl.value);
-  console.log('[ConnectionSettings] handleModeChange - current apiKey:', getApiKey() ? 'yes (masked)' : 'no');
+  console.log('[ConnectionSettings] handleModeChange - switching to:', mode);
+  console.log('[ConnectionSettings] handleModeChange - previous serverUrl:', serverUrl.value);
 
-  // 切出远程模式前，先把当前输入的 URL 持久化到 localStorage
-  if (deployMode.value === "remote" && serverUrl.value.trim()) {
+  if (appStore.deployMode === "remote" && serverUrl.value.trim()) {
     let url = serverUrl.value.trim();
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "http://" + url;
     }
     url = url.replace(/\/+$/, "");
     setServerUrl(url);
-    console.log('[ConnectionSettings] handleModeChange - persisted URL before mode switch:', url);
   }
 
-  deployMode.value = mode;
-
   if (mode === "local") {
-    console.log('[ConnectionSettings] handleModeChange - switching to LOCAL mode');
-    const oldUrl = serverUrl.value;
     serverUrl.value = "";
-    // 不清空 localStorage，保留配置以便切回远程模式时恢复
-    console.log('[ConnectionSettings] handleModeChange - cleared serverUrl from:', oldUrl, 'to empty');
-    console.log('[ConnectionSettings] handleModeChange - localStorage hermes_server_url now:', getBaseUrlValue());
-    
     await fetchCliStatus();
-    
     if (cliStatus.value && !cliStatus.value.hermes_cli_available) {
       message.warning(t("settings.connection.localModeCliMissing"));
-      console.log('[ConnectionSettings] Warning: Local mode selected but hermes CLI not available');
     } else {
       message.success(t("settings.connection.switchToLocal"));
     }
-    console.log('[ConnectionSettings] handleModeChange - success message shown');
   } else {
-    console.log('[ConnectionSettings] handleModeChange - switching to REMOTE mode');
-    // 从 localStorage 恢复已保存的远程 URL
     if (!serverUrl.value.trim()) {
       const savedUrl = getBaseUrlValue();
       if (savedUrl) {
         serverUrl.value = savedUrl;
       }
     }
-    console.log('[ConnectionSettings] handleModeChange - serverUrl input value:', serverUrl.value);
-    console.log('[ConnectionSettings] handleModeChange - apiKey input value:', apiKey.value ? 'yes (masked)' : 'no');
-    
     if (serverUrl.value.trim()) {
       let url = serverUrl.value.trim();
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -102,20 +77,15 @@ async function handleModeChange(mode: "local" | "remote") {
       }
       url = url.replace(/\/+$/, "");
       setServerUrl(url);
-      console.log('[ConnectionSettings] handleModeChange - auto-saved serverUrl:', url);
     }
-    
     if (apiKey.value.trim()) {
       setApiKey(apiKey.value.trim());
-      console.log('[ConnectionSettings] handleModeChange - auto-saved apiKey');
     }
-    
     message.success(t("settings.connection.switchToRemote"));
-    console.log('[ConnectionSettings] handleModeChange - success message shown');
   }
 
-  console.log('[ConnectionSettings] handleModeChange - final deployMode:', deployMode.value);
-  console.log('[ConnectionSettings] handleModeChange - final isRemote:', isRemote.value);
+  appStore.syncDeployMode();
+  console.log('[ConnectionSettings] handleModeChange - final deployMode:', appStore.deployMode);
 }
 
 function handleUrlSave() {
@@ -181,7 +151,7 @@ async function testConnection() {
       'Content-Type': 'application/json',
     };
 
-    if (isRemote.value) {
+    if (appStore.deployMode === "remote") {
       // 远程模式：测试远程服务器
       if (!serverUrl.value.trim()) {
         console.log('[ConnectionSettings] testConnection - validation failed: empty URL');
@@ -235,7 +205,7 @@ async function testConnection() {
       console.log('[ConnectionSettings] testConnection - success:', data);
       testConnectionResult.value = 'success';
       
-      if (isRemote.value) {
+      if (appStore.deployMode === "remote") {
         testConnectionMessage.value = t("settings.connection.testSuccess");
         message.success(t("settings.connection.testSuccess"));
       } else {
@@ -267,7 +237,7 @@ async function testConnection() {
   <section class="settings-section">
     <div class="mode-selector">
       <NSelect
-        :value="deployMode"
+        :value="appStore.deployMode"
         :options="[
           { label: t('settings.connection.localMode'), value: 'local' },
           { label: t('settings.connection.remoteMode'), value: 'remote' },
@@ -279,7 +249,7 @@ async function testConnection() {
       />
     </div>
 
-    <template v-if="isRemote">
+    <template v-if="appStore.deployMode === 'remote'">
       <div class="setting-row">
         <div class="setting-info">
           <label class="setting-label">{{ t("settings.connection.serverUrl") }}</label>
@@ -345,7 +315,7 @@ async function testConnection() {
           size="small" 
           :loading="testConnectionLoading"
           @click="testConnection"
-          :disabled="isRemote && !serverUrl.trim()"
+          :disabled="appStore.deployMode === 'remote' && !serverUrl.trim()"
         >
           {{ t("settings.connection.testConnection") }}
         </NButton>

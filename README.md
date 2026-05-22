@@ -169,11 +169,14 @@ backup/hermes-web-ui-switch/
     │       │       ├── chat.ts       # Socket.IO 连接（直连 Koa 后端）
     │       │       ├── group-chat.ts # 群聊 Socket.IO 连接
     │       │       └── kanban.ts     # 看板事件 WebSocket 连接（直连 Koa 后端）
+    │       ├── stores/hermes/
+    │       │   └── app.ts              # Pinia 应用状态（新增 deployMode）
     │       ├── components/hermes/
     │       │   ├── settings/
     │       │   │   └── ConnectionSettings.vue
     │       │   └── chat/
-    │       │       └── TerminalPanel.vue  # 终端 WebSocket（直连 Koa 后端）
+    │       │       ├── ChatPanel.vue       # 对话面板头部新增远端/本地模式徽标
+    │       │       └── TerminalPanel.vue   # 终端 WebSocket（直连 Koa 后端）
     │       ├── views/hermes/
     │       │   └── SettingsView.vue
     │       └── i18n/locales/
@@ -199,6 +202,9 @@ backup/hermes-web-ui-switch/
 | client.ts | `packages/client/src/api/` | API 客户端配置，包含开发模式代理和服务器地址管理 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 连接设置组件，包含本地/分离部署模式切换功能 |
 | SettingsView.vue | `packages/client/src/views/hermes/` | 设置页面主视图，包含连接标签页配置 |
+| app.ts (store) | `packages/client/src/stores/hermes/` | Pinia 应用状态，新增 `deployMode` + `syncDeployMode()` 供全局响应式使用 |
+| ChatPanel.vue | `packages/client/src/components/hermes/chat/` | 对话面板头部新增远端/本地模式徽标（绿色/蓝色圆点 + 文字） |
+| ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 改为使用 `appStore.deployMode`，移除本地 deployMode ref |
 | kanban.ts | `packages/client/src/api/hermes/` | 看板事件 WebSocket 连接，dev 模式直连 Koa（远程 Agent 无此端点） |
 | TerminalPanel.vue | `packages/client/src/components/hermes/chat/` | 终端 WebSocket 连接，dev 模式直连 Koa |
 | zh.ts | `packages/client/src/i18n/locales/` | 中文国际化翻译文件 |
