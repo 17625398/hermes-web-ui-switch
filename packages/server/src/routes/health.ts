@@ -13,8 +13,10 @@ healthRoutes.post('/api/connection/test-upstream', async (ctx: any) => {
     return
   }
   const upstream = url.replace(/\/+$/, '')
+  // Use server env API key as fallback (matches handleApiRun behavior)
+  const effectiveApiKey = apiKey || process.env.VITE_HERMES_GATEWAY_API_KEY || undefined
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+  if (effectiveApiKey) headers['Authorization'] = `Bearer ${effectiveApiKey}`
   try {
     const res = await fetch(`${upstream}/v1/responses`, {
       method: 'POST',
