@@ -405,6 +405,40 @@ chat.ts store.sendMessage()
 
 **注意**：切换部署模式不需要重启 Koa 服务，但分离部署模式下需确保远程 Agent 可通过网络访问，且 `.env` 或 `localStorage` 中正确配置了远程 URL 和 API Key。
 
+#### 连接健康指示器（v0.5.32+）
+
+**聊天标题栏**的部署模式徽章新增彩色圆点，实时反映连接健康状态：
+
+| 圆点颜色 | 本地模式含义 | 分离部署模式含义 |
+|---|---|---|
+| 🟢 绿色 | Koa + Gateway 均正常运行 | 远程 Agent 可达 |
+| 🟡 黄色（闪烁） | Koa 正常，Gateway 未运行 | （不适用） |
+| 🔴 红色 | Koa 不可达 | 远程 Agent 不可达 |
+
+**告警横幅**在聊天区顶部自动显示：
+- 本地模式：Gateway 未运行时提示 `hermes gateway start`
+- 分离部署：远程 Agent 不可达时引导用户检查连接设置
+
+`/health` 端点（`GET /health`）现在返回真实的 `gateway` 和 `bridge` 状态：
+```json
+{
+  "status": "ok",
+  "gateway": "running",
+  "gateway_pid": 27688,
+  "gateway_detail": "✓ Gateway is running (PID: 27688)",
+  "bridge": "running"
+}
+```
+
+#### 连接测试增强（v0.5.32+）
+
+**设置 → 连接** 页面的"测试连接"按钮现在执行更深入的验证：
+
+| 模式 | 第一步 | 第二步 |
+|---|---|---|
+| **本地模式** | `GET /health`（检测 Koa 是否可达） | 检查 `gateway` 字段 — 若 Gateway 未运行则告警 |
+| **分离部署** | `GET /health`（检测远端是否可达） | `POST /v1/responses` 发送极小测试请求 — 验证 API 端点是否正常响应 |
+
 ---
 
 ## 架构说明

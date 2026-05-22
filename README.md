@@ -412,6 +412,40 @@ chat.ts store.sendMessage()
 
 > Restarting the Koa server is **not required** when switching modes. However, in remote mode, ensure the remote Agent is network-reachable and the URL/API Key are correctly configured in `.env` or `localStorage`.
 
+#### Connection Health Indicators (v0.5.32+)
+
+The **Chat Header** badge now reflects real-time connection health via a colored dot:
+
+| Dot Color | Local Mode Meaning | Remote Mode Meaning |
+|---|---|---|
+| 🟢 Green | Koa + Gateway both running | Remote Agent reachable |
+| 🟡 Yellow (pulsing) | Koa OK, Gateway stopped | (not applicable) |
+| 🔴 Red | Koa unreachable | Remote Agent unreachable |
+
+A **warning banner** appears below the chat header when:
+- Local mode: Gateway is not running (`hermes gateway start`)
+- Remote mode: Upstream Agent is unreachable (check URL/API Key in Settings)
+
+The `/health` endpoint (`GET /health`) now returns real `gateway` and `bridge` fields:
+```json
+{
+  "status": "ok",
+  "gateway": "running",
+  "gateway_pid": 27688,
+  "gateway_detail": "✓ Gateway is running (PID: 27688)",
+  "bridge": "running"
+}
+```
+
+#### Test Connection Improvements (v0.5.32+)
+
+The **Test Connection** button in Settings → Connection now performs deeper validation:
+
+| Mode | Step 1 | Step 2 |
+|---|---|---|
+| **Local** | `GET /health` (Koa reachability) | Checks `gateway` field — warns if Hermes Gateway is stopped |
+| **Remote** | `GET /health` (upstream reachability) | `POST /v1/responses` with a minimal test request — validates the actual API endpoint works |
+
 ---
 
 ## Architecture
