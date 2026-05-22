@@ -219,34 +219,27 @@ async function testConnection() {
       const data = await response.json();
       console.log('[ConnectionSettings] testConnection - health success:', data);
 
-      // Step 2: Verify /v1/responses endpoint
+      // Step 2: Verify /v1/responses endpoint via server-side proxy
       testConnectionMessage.value = 'health 正常，验证 responses 端点…';
-      let responsesUrl: string;
-      if (import.meta.env.DEV) {
-        // Vite 代理已配置将 /v1/* 转发到 VITE_HERMES_GATEWAY_URL
-        responsesUrl = `/v1/responses`;
-      } else {
-        responsesUrl = `${url}/v1/responses`;
-      }
-
       try {
-        const respCheck = await fetch(responsesUrl, {
+        const respCheck = await fetch('/api/connection/test-upstream', {
           method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: 'test', stream: false, max_output_tokens: 1 }),
-          signal: AbortSignal.timeout(8000),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, apiKey: apiKey.value.trim() || undefined }),
+          signal: AbortSignal.timeout(15000),
         });
-        if (respCheck.ok) {
+        const result = await respCheck.json();
+        if (result.ok) {
           testConnectionResult.value = 'success';
           testConnectionMessage.value = t("settings.connection.testSuccess");
           message.success(t("settings.connection.testSuccess"));
-        } else if (respCheck.status === 401 || respCheck.status === 403) {
+        } else if (result.status === 401 || result.status === 403) {
           testConnectionResult.value = 'error';
           testConnectionMessage.value = '远程 Agent 拒绝访问（401/403）。请检查 API Key 是否正确。';
           message.error(testConnectionMessage.value);
         } else {
           testConnectionResult.value = 'error';
-          testConnectionMessage.value = `远程 responses 端点返回 ${respCheck.status}。请确认远程 Agent 已启用 /v1/responses。`;
+          testConnectionMessage.value = `远程 responses 端点返回 ${result.status || '错误'}: ${result.error || '无详情'}。请确认远程 Agent 已启用 /v1/responses。`;
           message.error(testConnectionMessage.value);
         }
       } catch {
