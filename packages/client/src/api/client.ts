@@ -76,6 +76,12 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     headers['X-Hermes-Profile'] = profileName
   }
 
+  // Inject deploy mode header so Koa proxy middleware can dynamically route
+  // between local GatewayManager and remote Agent based on runtime setting.
+  if (getBaseUrlValue()) {
+    headers['X-Hermes-Deploy-Mode'] = 'remote'
+  }
+
   const res = await fetch(url, { ...options, headers })
 
   // Global 401 handler — only redirect to login for local BFF endpoints

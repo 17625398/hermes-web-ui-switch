@@ -166,6 +166,14 @@ export async function handleApiRun(
       socket.emit(event, tagged)
     }
   }
+
+  if (!upstream) {
+    const msg = 'Remote mode enabled but VITE_HERMES_GATEWAY_URL is not set. Configure the remote Agent URL in .env or Connection Settings.'
+    if (session_id) await markApiCompleted(nsp, socket, session_id, sessionMap, { event: 'run.failed' })
+    emit('run.failed', { event: 'run.failed', error: msg })
+    return
+  }
+
   try {
     const body: Record<string, any> = { input }
     if (model) body.model = model

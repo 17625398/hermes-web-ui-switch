@@ -69,13 +69,18 @@ function resolveProfile(ctx: Context): string {
   }
 }
 
-/** Resolve upstream URL for a request based on profile header/query */
+/** Resolve upstream URL for a request based on profile header/query and deploy mode */
 function resolveUpstream(ctx: Context): string {
-  // 分离部署模式：如果配置了远程 Gateway URL，直接使用（不依赖本地 GatewayManager）
-  const remoteUrl = process.env.VITE_HERMES_GATEWAY_URL
-  if (remoteUrl) {
-    return remoteUrl.replace(/\/+$/, '')
+  // 动态部署模式：优先读取客户端请求头 X-Hermes-Deploy-Mode
+  const deployMode = ctx.get('x-hermes-deploy-mode')
+  if (deployMode === 'remote') {
+    const remoteUrl = process.env.VITE_HERMES_GATEWAY_URL
+    if (remoteUrl) {
+      return remoteUrl.replace(/\/+$/, '')
+    }
+    // 客户端请求远程但未配置 VITE_HERMES_GATEWAY_URL — fall through to GatewayManager
   }
+  // 本地模式或未指定：使用本地 GatewayManager
   const mgr = getGatewayManager()
   if (!mgr) {
     throw new Error('GatewayManager not initialized')

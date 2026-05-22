@@ -4,7 +4,10 @@ import type { ProxyOptions } from 'vite'
 import { resolve } from 'path'
 import pkg from './package.json'
 
-const BACKEND = process.env.VITE_HERMES_GATEWAY_URL || 'http://127.0.0.1:8648'
+// Always proxy through Koa :8648 so Koa's proxy middleware can dynamically
+// route based on runtime deploy mode (local GatewayManager vs remote Agent).
+// VITE_HERMES_GATEWAY_URL is still used by Koa's proxy middleware at runtime.
+const BACKEND = 'http://127.0.0.1:8648'
 
 function createProxyConfig(): ProxyOptions {
   return {
