@@ -342,10 +342,14 @@ copy "<BACKUP_DIR>\packages\client\src\api\hermes\kanban.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\api\client.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\"
+copy "<BACKUP_DIR>\packages\client\src\stores\hermes\app.ts" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\stores\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\main.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\"
 copy "<BACKUP_DIR>\packages\client\src\components\hermes\settings\ConnectionSettings.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\settings\"
+copy "<BACKUP_DIR>\packages\client\src\components\hermes\chat\ChatPanel.vue" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\chat\"
 copy "<BACKUP_DIR>\packages\client\src\components\hermes\chat\TerminalPanel.vue" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\components\hermes\chat\"
 copy "<BACKUP_DIR>\packages\client\src\views\hermes\SettingsView.vue" `
