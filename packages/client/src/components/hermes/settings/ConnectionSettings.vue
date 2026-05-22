@@ -2,9 +2,10 @@
 import { ref, onMounted } from "vue";
 import { NSelect, NInput, NButton, useMessage, NAlert } from "naive-ui";
 import { useI18n } from "vue-i18n";
-import { setServerUrl, getBaseUrlValue, setApiKey, getApiKey, clearApiKey, request } from "@/api/client";
+import { setServerUrl, getBaseUrlValue, setApiKey, getApiKey, clearApiKey } from "@/api/client";
 import { useAppStore } from "@/stores/hermes/app";
 
+const LOCAL_AUTH_TOKEN_KEY = 'hermes_local_auth_token'
 const { t } = useI18n();
 const message = useMessage();
 const appStore = useAppStore();
@@ -12,22 +13,29 @@ const appStore = useAppStore();
 const serverUrl = ref("");
 const apiKey = ref("");
 const showApiKey = ref(false);
-const cliStatus = ref<{ hermes_cli_available: boolean; message?: string } | null>(null);
-const cliStatusLoading = ref(true);
+const localAuthToken = ref("");
+const showLocalAuthToken = ref(false);
+const localHealthOk = ref(false);
+const localHealthLoading = ref(true);
 const testConnectionLoading = ref(false);
 const testConnectionResult = ref<'success' | 'error' | null>(null);
 const testConnectionMessage = ref("");
 
-async function fetchCliStatus() {
+/** Build the base URL for direct Koa access bypassing Vite proxy */
+function koaBaseUrl(): string {
+  return import.meta.env.DEV ? 'http://127.0.0.1:8648' : ''
+}
+
+/** Check Koa /health (public, no auth required) */
+async function checkLocalHealth() {
   try {
-    cliStatusLoading.value = true;
-    cliStatus.value = await request('/api/cli-status');
-    console.log('[ConnectionSettings] CLI status fetched:', cliStatus.value);
-  } catch (err) {
-    console.error('[ConnectionSettings] Failed to fetch CLI status:', err);
-    cliStatus.value = { hermes_cli_available: false, message: 'Failed to check Hermes CLI availability' };
+    localHealthLoading.value = true;
+    const res = await fetch(`${koaBaseUrl()}/health`);
+    localHealthOk.value = res.ok;
+  } catch {
+    localHealthOk.value = false;
   } finally {
-    cliStatusLoading.value = false;
+    localHealthLoading.value = false;
   }
 }
 
@@ -35,16 +43,25 @@ onMounted(async () => {
   appStore.syncDeployMode();
   serverUrl.value = getBaseUrlValue();
   apiKey.value = getApiKey();
+  localAuthToken.value = localStorage.getItem(LOCAL_AUTH_TOKEN_KEY) || ''
   console.log('[ConnectionSettings] onMounted - deployMode:', appStore.deployMode, 'serverUrl:', serverUrl.value);
-  
+
   if (appStore.deployMode === "local") {
-    await fetchCliStatus();
+    await checkLocalHealth();
   }
 });
 
+function saveLocalAuthToken() {
+  if (localAuthToken.value.trim()) {
+    localStorage.setItem(LOCAL_AUTH_TOKEN_KEY, localAuthToken.value.trim())
+  } else {
+    localStorage.removeItem(LOCAL_AUTH_TOKEN_KEY)
+  }
+  message.success(t("settings.saved"))
+}
+
 async function handleModeChange(mode: "local" | "remote") {
   console.log('[ConnectionSettings] handleModeChange - switching to:', mode);
-  console.log('[ConnectionSettings] handleModeChange - previous serverUrl:', serverUrl.value);
 
   if (appStore.deployMode === "remote" && serverUrl.value.trim()) {
     let url = serverUrl.value.trim();
@@ -56,16 +73,19 @@ async function handleModeChange(mode: "local" | "remote") {
   }
 
   if (mode === "local") {
-    serverUrl.value = "";
-    await fetchCliStatus();
-    if (cliStatus.value && !cliStatus.value.hermes_cli_available) {
-      message.warning(t("settings.connection.localModeCliMissing"));
-    } else {
-      message.success(t("settings.connection.switchToLocal"));
+    // 备份远程 URL 后清除 localStorage，使 syncDeployMode 正确返回 "local"
+    const currentUrl = getBaseUrlValue()
+    if (currentUrl) {
+      localStorage.setItem('hermes_server_url_backup', currentUrl)
     }
+    localStorage.removeItem('hermes_server_url')
+    serverUrl.value = "";
+    await checkLocalHealth();
+    message.success(t("settings.connection.switchToLocal"));
   } else {
     if (!serverUrl.value.trim()) {
-      const savedUrl = getBaseUrlValue();
+      // 优先从备份恢复远程 URL
+      const savedUrl = getBaseUrlValue() || localStorage.getItem('hermes_server_url_backup') || '';
       if (savedUrl) {
         serverUrl.value = savedUrl;
       }
@@ -85,7 +105,6 @@ async function handleModeChange(mode: "local" | "remote") {
   }
 
   appStore.syncDeployMode();
-  console.log('[ConnectionSettings] handleModeChange - final deployMode:', appStore.deployMode);
 }
 
 function handleUrlSave() {
@@ -182,16 +201,9 @@ async function testConnection() {
         console.log('[ConnectionSettings] testConnection - using API key');
       }
     } else {
-      // 本地模式：测试本地服务
-      if (import.meta.env.DEV) {
-        // 开发环境：通过 Vite 代理避免 CORS 问题
-        testUrl = '/api/cli-status';
-        console.log('[ConnectionSettings] testConnection - dev mode, testing local via proxy');
-      } else {
-        // 生产环境：直接请求本地服务
-        testUrl = 'http://127.0.0.1:8648/api/cli-status';
-        console.log('[ConnectionSettings] testConnection - testing local directly');
-      }
+      // 本地模式：测试 Koa 连通性（/health 公开端点，直连不走 Vite 代理）
+      testUrl = `${koaBaseUrl()}/health`;
+      console.log('[ConnectionSettings] testConnection - testing local at', testUrl);
     }
 
     const response = await fetch(testUrl, {
@@ -204,16 +216,8 @@ async function testConnection() {
       const data = await response.json();
       console.log('[ConnectionSettings] testConnection - success:', data);
       testConnectionResult.value = 'success';
-      
-      if (appStore.deployMode === "remote") {
-        testConnectionMessage.value = t("settings.connection.testSuccess");
-        message.success(t("settings.connection.testSuccess"));
-      } else {
-        testConnectionMessage.value = data.hermes_cli_available 
-          ? t("settings.connection.testSuccess") + ' - Hermes CLI 可用'
-          : t("settings.connection.testFailed") + ' - Hermes CLI 不可用';
-        message[data.hermes_cli_available ? 'success' : 'warning'](testConnectionMessage.value);
-      }
+      testConnectionMessage.value = t("settings.connection.testSuccess");
+      message.success(t("settings.connection.testSuccess"));
     } else {
       const text = await response.text().catch(() => '');
       console.error('[ConnectionSettings] testConnection - failed:', response.status, text);
@@ -269,43 +273,66 @@ async function testConnection() {
           {{ t("common.save") }}
         </NButton>
       </div>
+    </template>
 
+    <!-- API Key / Auth Token — 本地和远程模式都需要 -->
+    <div class="setting-row">
+      <div class="setting-info">
+        <label class="setting-label">{{ t("settings.connection.apiKey") }}</label>
+        <p class="setting-hint">{{ t("settings.connection.apiKeyHint") }}</p>
+      </div>
+      <div class="setting-control">
+        <NInput
+          v-model:value="apiKey"
+          :type="showApiKey ? 'text' : 'password'"
+          :placeholder="t('settings.connection.apiKeyPlaceholder')"
+          size="small"
+          class="input-sm"
+        />
+      </div>
+    </div>
+    <div class="setting-actions">
+      <NButton size="small" @click="showApiKey = !showApiKey">
+        {{ showApiKey ? t("settings.connection.hide") : t("settings.connection.show") }}
+      </NButton>
+      <NButton type="primary" size="small" @click="handleApiKeySave">
+        {{ t("common.save") }}
+      </NButton>
+    </div>
+
+    <template v-if="appStore.deployMode === 'local'">
       <div class="setting-row">
         <div class="setting-info">
-          <label class="setting-label">{{ t("settings.connection.apiKey") }}</label>
-          <p class="setting-hint">{{ t("settings.connection.apiKeyHint") }}</p>
+          <label class="setting-label">本地认证 Token</label>
+          <p class="setting-hint">Koa 后端 AUTH_TOKEN，与 .env 中的值一致</p>
         </div>
         <div class="setting-control">
           <NInput
-            v-model:value="apiKey"
-            :type="showApiKey ? 'text' : 'password'"
-            :placeholder="t('settings.connection.apiKeyPlaceholder')"
+            v-model:value="localAuthToken"
+            :type="showLocalAuthToken ? 'text' : 'password'"
+            placeholder="输入 AUTH_TOKEN"
             size="small"
             class="input-sm"
           />
         </div>
       </div>
       <div class="setting-actions">
-        <NButton size="small" @click="showApiKey = !showApiKey">
-          {{ showApiKey ? t("settings.connection.hide") : t("settings.connection.show") }}
+        <NButton size="small" @click="showLocalAuthToken = !showLocalAuthToken">
+          {{ showLocalAuthToken ? '隐藏' : '显示' }}
         </NButton>
-        <NButton type="primary" size="small" @click="handleApiKeySave">
-          {{ t("common.save") }}
+        <NButton type="primary" size="small" @click="saveLocalAuthToken">
+          保存
         </NButton>
       </div>
 
+      <div v-if="localHealthLoading" class="local-hint">正在检查 Koa 连接…</div>
+      <div v-else-if="localHealthOk" class="local-hint" style="background: rgba(16,185,129,0.1); color: #10b981;">
+        Koa 服务正常
+      </div>
+      <div v-else class="local-hint" style="background: rgba(239,68,68,0.1); color: #ef4444;">
+        Koa 服务不可达（127.0.0.1:8648），请确认后端已启动
+      </div>
     </template>
-
-    <div v-else>
-      <div v-if="cliStatus && !cliStatus.hermes_cli_available" class="cli-warning">
-        <NAlert type="warning" :title="t('settings.connection.cliUnavailableTitle')" closable>
-          {{ cliStatus.message || t('settings.connection.cliUnavailableMessage') }}
-        </NAlert>
-      </div>
-      <div class="local-hint">
-        {{ t("settings.connection.localHint") }}
-      </div>
-    </div>
 
     <!-- 测试连接按钮 - 在本地和远程模式下都显示 -->
     <div class="test-section">

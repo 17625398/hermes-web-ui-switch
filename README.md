@@ -169,13 +169,15 @@ backup/hermes-web-ui-switch/
     │       │       ├── chat.ts       # Socket.IO 连接（直连 Koa 后端）
     │       │       ├── group-chat.ts # 群聊 Socket.IO 连接
     │       │       └── kanban.ts     # 看板事件 WebSocket 连接（直连 Koa 后端）
+    │       ├── shared/
+    │       │   └── session-display.ts  # 会话 source 标签（本地会话/分离部署会话）
     │       ├── stores/hermes/
     │       │   └── app.ts              # Pinia 应用状态（新增 deployMode）
     │       ├── components/hermes/
     │       │   ├── settings/
     │       │   │   └── ConnectionSettings.vue
     │       │   └── chat/
-    │       │       ├── ChatPanel.vue       # 对话面板头部新增远端/本地模式徽标
+    │       │       ├── ChatPanel.vue       # 对话面板头部部署模式徽标 + 会话分组
     │       │       └── TerminalPanel.vue   # 终端 WebSocket（直连 Koa 后端）
     │       ├── views/hermes/
     │       │   └── SettingsView.vue
@@ -202,8 +204,9 @@ backup/hermes-web-ui-switch/
 | client.ts | `packages/client/src/api/` | API 客户端配置，包含开发模式代理和服务器地址管理 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 连接设置组件，包含本地/分离部署模式切换功能 |
 | SettingsView.vue | `packages/client/src/views/hermes/` | 设置页面主视图，包含连接标签页配置 |
+| session-display.ts | `packages/client/src/shared/` | 会话 source 标签：`cli` → 本地会话，`api_server` → 分离部署会话 |
 | app.ts (store) | `packages/client/src/stores/hermes/` | Pinia 应用状态，新增 `deployMode` + `syncDeployMode()` 供全局响应式使用 |
-| ChatPanel.vue | `packages/client/src/components/hermes/chat/` | 对话面板头部新增远端/本地模式徽标（绿色/蓝色圆点 + 文字） |
+| ChatPanel.vue | `packages/client/src/components/hermes/chat/` | 对话面板头部部署模式徽标 + 侧栏会话按 `source` 分组显示 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 改为使用 `appStore.deployMode`，移除本地 deployMode ref |
 | kanban.ts | `packages/client/src/api/hermes/` | 看板事件 WebSocket 连接，dev 模式直连 Koa（远程 Agent 无此端点） |
 | TerminalPanel.vue | `packages/client/src/components/hermes/chat/` | 终端 WebSocket 连接，dev 模式直连 Koa |
@@ -342,6 +345,8 @@ copy "<BACKUP_DIR>\packages\client\src\api\hermes\kanban.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\api\client.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\"
+copy "<BACKUP_DIR>\packages\client\src\shared\session-display.ts" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\shared\"
 copy "<BACKUP_DIR>\packages\client\src\stores\hermes\app.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\stores\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\main.ts" `

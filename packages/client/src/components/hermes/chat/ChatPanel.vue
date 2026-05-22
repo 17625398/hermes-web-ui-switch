@@ -18,6 +18,7 @@ import {
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { copyToClipboard } from "@/utils/clipboard";
+import { getSourceLabel } from "@/shared/session-display";
 import FolderPicker from "./FolderPicker.vue";
 import ChatInput from "./ChatInput.vue";
 import ConversationMonitorPane from "./ConversationMonitorPane.vue";
@@ -121,6 +122,45 @@ const unpinnedSessions = computed(() =>
     ),
   ),
 );
+
+interface SessionGroup { source: string; label: string; sessions: Session[] }
+
+function sourceSortKey(source: string): number {
+  if (source === 'api_server') return -1
+  if (source === 'cron') return 999
+  return 0
+}
+
+const groupedSessions = computed<SessionGroup[]>(() => {
+  const map = new Map<string, Session[]>()
+  for (const s of unpinnedSessions.value) {
+    const key = s.source || ''
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(s)
+  }
+  const keys = [...map.keys()].sort((a, b) => {
+    const ka = sourceSortKey(a)
+    const kb = sourceSortKey(b)
+    if (ka !== kb) return ka - kb
+    return a.localeCompare(b)
+  })
+  return keys.map(key => ({
+    source: key,
+    label: key ? getSourceLabel(key) : t('chat.other'),
+    sessions: sortSessionsWithActiveFirst(map.get(key)!),
+  }))
+})
+
+const collapsedGroups = ref<Set<string>>(new Set(
+  JSON.parse(localStorage.getItem('hermes_chat_collapsed_groups') || '[]'),
+));
+
+function toggleGroup(source: string) {
+  const next = new Set(collapsedGroups.value)
+  if (next.has(source)) next.delete(source); else next.add(source)
+  collapsedGroups.value = next
+  localStorage.setItem('hermes_chat_collapsed_groups', JSON.stringify([...next]))
+}
 
 watch(
   () => [
@@ -805,25 +845,41 @@ async function handleSessionModelCustomSubmit() {
           />
         </template>
 
-        <SessionListItem
-          v-for="s in unpinnedSessions"
-          :key="s.id"
-          :session="s"
-          :active="s.id === chatStore.activeSessionId"
-          :pinned="false"
-          :can-delete="
-            s.id !== chatStore.activeSessionId ||
-            chatStore.sessions.length > 1
-          "
-          :streaming="chatStore.isSessionLive(s.id)"
-          :selectable="isBatchMode"
-          :selected="isSessionSelected(s.id)"
-          :show-profile="true"
-          @select="handleSessionClick(s.id)"
-          @contextmenu="handleContextMenu($event, s.id)"
-          @delete="handleDeleteSession(s.id)"
-          @toggle-select="toggleSessionSelection(s.id)"
-        />
+        <template v-for="group in groupedSessions" :key="group.source">
+          <div class="session-group-header" @click="toggleGroup(group.source)">
+            <svg
+              width="10" height="10" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2"
+              class="group-chevron"
+              :class="{ collapsed: collapsedGroups.has(group.source) }"
+            >
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <span class="session-group-label">{{ group.label }}</span>
+            <span class="session-group-count">{{ group.sessions.length }}</span>
+          </div>
+          <template v-if="!collapsedGroups.has(group.source)">
+            <SessionListItem
+              v-for="s in group.sessions"
+              :key="s.id"
+              :session="s"
+              :active="s.id === chatStore.activeSessionId"
+              :pinned="false"
+              :can-delete="
+                s.id !== chatStore.activeSessionId ||
+                chatStore.sessions.length > 1
+              "
+              :streaming="chatStore.isSessionLive(s.id)"
+              :selectable="isBatchMode"
+              :selected="isSessionSelected(s.id)"
+              :show-profile="true"
+              @select="handleSessionClick(s.id)"
+              @contextmenu="handleContextMenu($event, s.id)"
+              @delete="handleDeleteSession(s.id)"
+              @toggle-select="toggleSessionSelection(s.id)"
+            />
+          </template>
+        </template>
       </div>
     </aside>
 
