@@ -222,43 +222,142 @@ npm run dev
 
 ## 部署模式
 
-Hermes Web UI 支持两种部署模式：
+Hermes Web UI 支持两种部署模式：**本地模式（Local）** 和 **分离部署（Remote）**。
 
-| 模式 | 说明 |
-|---|---|
-| **本地模式（Local）** | Web UI 在本地启动 Hermes Agent Bridge，所有聊天和 API 请求由本地 Agent 处理 |
-| **分离部署（Remote）** | Web UI 与 Hermes Agent 部署在不同机器，通过 HTTP API 通信 |
+两种模式在**路由路径**、**进程模型**、**功能边界**上有根本差异。理解这些差异对配置和排错至关重要。
 
-### 本地模式（默认）
+### 模式对比
 
-Web UI 自动：
-1. 通过 AgentBridgeClient 连接到本地 GatewayManager（端口 18765）
-2. GatewayManager 调度本地 Hermes Agent 进程
-3. 所有聊天会话由本地 Agent 处理
+| 对比维度 | 本地模式（Local） | 分离部署（Remote） |
+|---|---|---|
+| **Agent 位置** | 与 Koa 同机，由 GatewayManager 进程管理 | 远程机器，通过 HTTP API 访问 |
+| **GatewayManager** | 启动并管理本地 Agent 进程（:18765） | **不启动**，只在需要时发送 API 请求 |
+| **HTTP API 路径** | 浏览器 → Vite 代理 → Koa 路由 → GatewayManager → Agent | 浏览器 → Vite 代理 → **远程 Agent(:8642)** |
+| **聊天路径** | 浏览器 → Koa Socket.IO → AgentBridgeClient → GatewayManager → Agent | 浏览器 → Koa Socket.IO → **Koa fetch 直接调用远程 API** |
+| **依赖** | 本地需安装 Hermes Agent、Python 运行环境 | 只需远程 Agent 可达，本地无需 Agent |
+| **适用场景** | 单机开发、个人使用 | 多机部署、团队共享远程 Agent |
+| **中断恢复** | ChatRunSocket + Koa 都中断则会话丢失 | 会话持久化到 SQLite，重启后可恢复 |
+| **Web 终端** | ✅ 支持（本地 node-pty 直连） | ❌ 不支持（依赖本地 shell） |
 
-```
-Browser → Koa (:8648)
-  ├── HTTP API → Koa Route → local GatewayManager (:18765) → local Agent
-  └── Socket.IO → ChatRunSocket → AgentBridgeClient → GatewayManager → local Agent
-```
-
-### 分离部署模式
-
-Web UI 与 Hermes Agent 部署在不同机器：
+### 路由决策树
 
 ```
-Browser
-  ├── HTTP API → Vite Proxy (:5173) → remote Agent (:8642)
-  └── Socket.IO → Koa (:8648) → handleApiRun → remote Agent (:8642/v1/responses)
+用户发送聊天消息
+  → chat.ts store.sendMessage()
+  → 读取 appStore.deployMode
+      ↓
+  ├── deployMode === "local"  →  source = "cli"
+  │     → Socket.IO emit('run', { source: "cli", ... })
+  │     → Koa ChatRunSocket.handleRun()
+  │     → resolveRunSource("cli") → return "cli"
+  │     → handleBridgeRun()
+  │     → AgentBridgeClient → GatewayManager (:18765) → 本地 Agent
+  │     → 流式结果 → Socket.IO → 浏览器
+  │
+  └── deployMode === "remote"  →  source = "api_server"
+        → Socket.IO emit('run', { source: "api_server", ... })
+        → Koa ChatRunSocket.handleRun()
+        → resolveRunSource("api_server") → return "api_server"
+        → handleApiRun()
+        → POST fetch("http://<远程IP>:8642/v1/responses")
+        → 远程 Agent 处理
+        → SSE 流 → 逐帧解析 → Socket.IO → 浏览器
 ```
 
-客户端数据流：
-1. **REST API**（模型列表、会话查询、日志等）：通过 Vite 代理转发到远程 Agent
-2. **Socket.IO 聊天**：浏览器直连 Koa 后端，Koa 的 `handleApiRun` 将 /v1/responses 请求发送到远程 Agent，流式响应逐帧转发回前端
+### 功能边界
 
-### 配置步骤（分离部署）
+| 功能 | 本地模式 | 分离部署 |
+|---|---|---|
+| 聊天对话 | ✅ | ✅ |
+| 会话管理 | ✅ | ✅ |
+| 模型选择 | ✅ | ✅ |
+| 文件上传/下载 | ✅ | ✅（受远程 Agent 限制） |
+| 平台渠道配置 | ✅ | ✅ |
+| 定时任务 | ✅ | ✅ |
+| Web 终端 | ✅ | ❌ |
+| 日志查看 | ✅ | ❌（本地日志不可达） |
+| 文件浏览器（远程后端） | ✅ | ✅ |
+| CLI Session 命令 | ✅ | ❌ |
 
-**生产环境**（npm install -g）：
+### 本地模式详解
+
+本地模式下 Koa 启动完整的 Agent 管理栈：
+
+```
+┌─ Koa 进程 ──────────────────────────────────┐
+│                                               │
+│  ChatRunSocket                                │
+│    ↓ source === "cli"                         │
+│  handleBridgeRun()                            │
+│    ↓                                          │
+│  AgentBridgeClient (Socket.IO 客户端)          │
+│    ↓ ws://127.0.0.1:18765                     │
+│  GatewayManager (Koa 子进程)                   │
+│    ↓                                          │
+│  Hermes Agent (Python 进程)                    │
+│    ↓                                          │
+│  run_agent.py → LLM → 工具调用 → 流式输出       │
+│                                               │
+└───────────────────────────────────────────────┘
+```
+
+- GatewayManager 监听 `127.0.0.1:18765`，是一个独立的 Koa 服务
+- AgentBridgeClient 是 Web UI 的 Socket.IO 客户端，连接到 GatewayManager
+- 所有 Agent 管理（启动/停止/重启）由 GatewayManager 控制
+- Web 终端使用 node-pty 直接创建本地 shell 进程
+
+### 分离部署模式详解
+
+分离部署模式下 Koa **不启动** GatewayManager，聊天通过 HTTP fetch 直接调用远程 Agent API：
+
+```
+┌─ Koa 进程（无 GatewayManager）─────────────────┐
+│                                                 │
+│  ChatRunSocket                                  │
+│    ↓ source === "api_server"                    │
+│  handleApiRun()                                 │
+│    ↓                                            │
+│  POST fetch("http://<remote>:8642/v1/responses") │
+│    ↓ Authorization: Bearer <API_KEY>            │
+│  ┌─────────────────────────────────────────┐   │
+│  │ 远程 Hermes Agent (:8642)                │   │
+│  │  → /v1/responses 处理                   │   │
+│  │  → SSE 流式返回                         │   │
+│  └─────────────────────────────────────────┘   │
+│    ↓                                            │
+│  readSseFrames(res.body)                        │
+│  → applyResponseStreamEvent()                  │
+│  → Socket.IO emit('run.chunk', ...) → 浏览器   │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+#### 分离部署下的 HTTP API 路径
+
+前端发起的 REST API 请求（非聊天）走另一条路径：
+
+```
+浏览器 → Vite 开发代理 (:5173) → remote Agent (:8642)
+           ↑                            ↑
+      /api/hermes/v1/models       VITE_HERMES_GATEWAY_URL
+      /api/hermes/sessions        proxy target
+      /health
+```
+
+Vite 代理将匹配 `/api`、`/v1`、`/health` 的请求转发到 `.env` 中配置的 `VITE_HERMES_GATEWAY_URL`。在分离部署模式下，这个目标就是远程 Agent，而不是本地 Koa。
+
+#### REST API 与 Chat API 路径分离
+
+```
+请求类型         本地模式            分离部署模式
+──────────────────────────────────────────────────────
+HTTP REST API   Koa → local Agent   Vite proxy → remote Agent (:8642)
+Socket.IO Chat  Koa → local Agent   Koa fetch → remote Agent (:8642)
+```
+
+### 配置步骤
+
+#### 分离部署 - 生产环境
 
 ```bash
 export HERMES_GATEWAY_URL=http://192.168.0.39:8642
@@ -266,9 +365,9 @@ export HERMES_GATEWAY_API_KEY=your-secret-key
 hermes-web-ui start
 ```
 
-**开发环境**（源码）：
+#### 分离部署 - 开发环境
 
-在项目根目录 `.env` 文件中设置：
+在 `.env` 中设置：
 
 ```env
 VITE_HERMES_GATEWAY_URL=http://192.168.0.39:8642
@@ -277,9 +376,7 @@ VITE_HERMES_GATEWAY_API_KEY=your-secret-key
 
 重启 dev server 后生效。
 
-### 通过 UI 切换部署模式
-
-> 这是 **0.5.32+** 新增功能
+### 通过 UI 切换部署模式（v0.5.32+）
 
 Web UI **设置 → 连接** 页面提供了部署模式切换开关，可在运行时动态切换，**无需重启服务**：
 
@@ -291,13 +388,22 @@ Web UI **设置 → 连接** 页面提供了部署模式切换开关，可在运
 4. 输入远程服务器 URL 和 API Key（切换远程模式时需要）
 5. 点击 **保存** 生效
 
-**后端切换逻辑**：
+**切换原理**：
 
-切换部署模式时，聊天请求的 `source` 字段随之改变：
-- 本地模式：`source: 'cli'` → 触发 `handleBridgeRun`（本地 Agent）
-- 分离部署：`source: 'api_server'` → 触发 `handleApiRun`（远程 Agent）
+```
+ConnectionSettings.vue
+  → handleModeChange("local" | "remote")
+  → setServerUrl() / localStorage.removeItem('hermes_server_url')
+  → appStore.syncDeployMode()
+      → deployMode = getBaseUrlValue() ? "remote" : "local"
+      → 更新全局状态
 
-**注意**：切换部署模式不需要重启 Koa 服务，但分离部署模式下需确保远程 Agent 可以通过网络访问，且 `.env` 或 `localStorage` 中正确配置了远程 URL 和 API Key。
+chat.ts store.sendMessage()
+  → const source = appStore.deployMode === 'remote' ? 'api_server' : 'cli'
+  → 后续路由参见 [路由决策树](#路由决策树)
+```
+
+**注意**：切换部署模式不需要重启 Koa 服务，但分离部署模式下需确保远程 Agent 可通过网络访问，且 `.env` 或 `localStorage` 中正确配置了远程 URL 和 API Key。
 
 ---
 
@@ -336,70 +442,22 @@ Web UI **设置 → 连接** 页面提供了部署模式切换开关，可在运
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 两层代理
+### 两层代理（开发模式）
 
-开发模式下存在 **两层代理**，理解其分工对排错至关重要：
+开发模式下存在 **两层代理**，其行为因部署模式而异：
 
-#### 第一层：Vite 开发代理（仅 dev 模式）
+| 代理层 | 端口 | 代理路径 | 本地模式目标 | 分离部署目标 | 适用请求 |
+|---|---|---|---|---|---|
+| **Vite 代理** | `:5173` | `/api/*`, `/v1/*`, `/health` | Koa `:8648` | 远程 Agent `:8642` | HTTP REST API（模型/会话/日志/任务等） |
+| **Koa 代理** | `:8648` | `/api/hermes/*`, `/v1/*` | GatewayManager `:18765` | 远程 Agent `:8642` | Koa 内部转发（Socket.IO->fetch, 后端代理） |
 
-`vite.config.ts` 中定义，将前端的 HTTP API 请求转发到 Koa 后端：
+> Socket.IO 聊天连接**不经过** Vite 代理，浏览器直连 Koa `:8648`。Koa 的 ChatRunSocket 再根据 `deployMode` 选择本地/远程路由。
 
-```javascript
-proxy: {
-  '/api':    { target: 'http://127.0.0.1:8648' },
-  '/v1':     { target: 'http://127.0.0.1:8648' },
-  '/health': { target: 'http://127.0.0.1:8648' },
-}
-```
-
-**作用**：为前端 API 请求提供 CORS 免配置的代理通道，仅限 HTTP 请求。
-
-**注意**：Socket.IO 连接**不经过** Vite 代理，浏览器直接连接 Koa `:8648`。
-
-#### 第二层：Koa 代理中间件（dev + production）
-
-`packages/server/src/routes/hermes/index.ts` 中定义，将后端 API 请求转发到目标 Agent。
-
-- 本地模式：转发到 `GatewayManager`（:18765）
-- 分离部署：转发到 `VITE_HERMES_GATEWAY_URL`（远程 Agent）
-
-**路径转换**：
+**路径转换**（Koa 代理）：
 
 ```
 客户端请求路径: /api/hermes/v1/responses
-Koa 代理路径:   /v1/responses           (去掉 /api/hermes 前缀)
-```
-
-### 聊天运行流程
-
-#### 本地模式
-
-```
-用户发送消息
-  → 前端 chat.ts store.sendMessage()
-  → Socket.IO emit('run', { source: "cli", ... })
-  → Koa ChatRunSocket 收到事件
-  → resolveRunSource() 返回 "cli"
-  → handleBridgeRun()
-  → AgentBridgeClient.send()
-  → GatewayManager (:18765)
-  → Hermes Agent 进程
-  → 流式结果逐帧返回前端
-```
-
-#### 分离部署模式
-
-```
-用户发送消息
-  → 前端 chat.ts store.sendMessage()
-  → Socket.IO emit('run', { source: "api_server", ... })
-  → Koa ChatRunSocket 收到事件
-  → resolveRunSource() 返回 "api_server"
-  → handleApiRun()
-  → POST fetch("http://192.168.0.39:8642/v1/responses")
-  → 远程 Hermes Agent 处理
-  → SSE 流式响应逐帧解析
-  → 转换为 Socket.IO events 推送回前端
+Koa 代理转发路径: /v1/responses          (去掉 /api/hermes 前缀)
 ```
 
 ---

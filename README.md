@@ -234,27 +234,135 @@ and package installs such as `pip install hermes-agent`.
 
 ## Deployment Modes
 
-Hermes Web UI supports two deployment modes:
+Hermes Web UI supports two deployment modes: **Local** and **Separated (Remote)**.
 
-| Mode | Description |
-|---|---|
-| **Local** | Web UI starts a local Hermes Agent Bridge; all chat and API requests handled by local Agent |
-| **Separated (Remote)** | Web UI and Hermes Agent deployed on different machines, communicating via HTTP API |
+These modes differ fundamentally in **routing path**, **process model**, and **feature support**.
 
-### Local Mode (Default)
+### Mode Comparison
+
+| Dimension | Local Mode | Remote Mode |
+|---|---|---|
+| **Agent location** | Same machine, managed by GatewayManager | Remote machine, accessed via HTTP API |
+| **GatewayManager** | Starts and manages local Agent process (:18765) | **Not started** — only sends API requests when needed |
+| **HTTP API path** | Browser → Vite proxy → Koa route → GatewayManager → Agent | Browser → Vite proxy → **remote Agent (:8642)** |
+| **Chat path** | Browser → Koa Socket.IO → AgentBridgeClient → GatewayManager → Agent | Browser → Koa Socket.IO → **Koa fetch directly to remote API** |
+| **Dependencies** | Requires local Hermes Agent + Python runtime | No local Agent needed, only network access to remote |
+| **Use case** | Single-machine development, personal use | Multi-machine deployment, shared remote Agent |
+| **Web Terminal** | ✅ Supported (local node-pty) | ❌ Not supported (depends on local shell) |
+
+### Routing Decision Tree
 
 ```
-Browser → Koa (:8648)
-  ├── HTTP API → Koa Route → local GatewayManager (:18765) → local Agent
-  └── Socket.IO → ChatRunSocket → AgentBridgeClient → GatewayManager → local Agent
+User sends chat message
+  → chat.ts store.sendMessage()
+  → reads appStore.deployMode
+      ↓
+  ├── deployMode === "local"  →  source = "cli"
+  │     → Socket.IO emit('run', { source: "cli", ... })
+  │     → Koa ChatRunSocket.handleRun()
+  │     → resolveRunSource("cli") → return "cli"
+  │     → handleBridgeRun()
+  │     → AgentBridgeClient → GatewayManager (:18765) → local Agent
+  │     → stream results → Socket.IO → browser
+  │
+  └── deployMode === "remote"  →  source = "api_server"
+        → Socket.IO emit('run', { source: "api_server", ... })
+        → Koa ChatRunSocket.handleRun()
+        → resolveRunSource("api_server") → return "api_server"
+        → handleApiRun()
+        → POST fetch("http://<remote IP>:8642/v1/responses")
+        → remote Agent processes
+        → SSE stream → frame parser → Socket.IO → browser
 ```
 
-### Separated Deployment
+### Feature Support by Mode
+
+| Feature | Local | Remote |
+|---|---|---|
+| Chat conversations | ✅ | ✅ |
+| Session management | ✅ | ✅ |
+| Model selection | ✅ | ✅ |
+| File upload/download | ✅ | ✅ (limited by remote Agent) |
+| Platform channel config | ✅ | ✅ |
+| Scheduled jobs | ✅ | ✅ |
+| Web Terminal | ✅ | ❌ |
+| Log viewer | ✅ | ❌ (local logs unreachable) |
+| File browser | ✅ | ✅ |
+| CLI Session commands | ✅ | ❌ |
+
+### Local Mode Architecture
+
+In local mode, Koa starts the full Agent management stack:
 
 ```
-Browser
-  ├── HTTP API → Vite Proxy (:5173) → remote Agent (:8642)
-  └── Socket.IO → Koa (:8648) → handleApiRun → remote Agent (:8642/v1/responses)
+┌─ Koa Process ──────────────────────────────────┐
+│                                                  │
+│  ChatRunSocket                                   │
+│    ↓ source === "cli"                            │
+│  handleBridgeRun()                               │
+│    ↓                                             │
+│  AgentBridgeClient (Socket.IO client)             │
+│    ↓ ws://127.0.0.1:18765                        │
+│  GatewayManager (Koa sub-process)                │
+│    ↓                                             │
+│  Hermes Agent (Python process)                   │
+│    ↓                                             │
+│  run_agent.py → LLM → tool calls → stream output │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+- GatewayManager listens on `127.0.0.1:18765` as a standalone Koa service
+- AgentBridgeClient is a Socket.IO client that connects to GatewayManager
+- Web Terminal uses node-pty to create local shell processes
+
+### Remote Mode Architecture
+
+In remote mode, Koa **does not start** GatewayManager. Chat uses HTTP fetch to call the remote Agent API directly:
+
+```
+┌─ Koa Process (no GatewayManager) ────────────────┐
+│                                                   │
+│  ChatRunSocket                                    │
+│    ↓ source === "api_server"                      │
+│  handleApiRun()                                   │
+│    ↓                                              │
+│  POST fetch("http://<remote>:8642/v1/responses")   │
+│    ↓ Authorization: Bearer <API_KEY>              │
+│  ┌───────────────────────────────────────────┐   │
+│  │ Remote Hermes Agent (:8642)               │   │
+│  │  → /v1/responses handler                  │   │
+│  │  → SSE stream back                        │   │
+│  └───────────────────────────────────────────┘   │
+│    ↓                                              │
+│  readSseFrames(res.body)                          │
+│  → applyResponseStreamEvent()                    │
+│  → Socket.IO emit('run.chunk', ...) → browser    │
+│                                                   │
+└───────────────────────────────────────────────────┘
+```
+
+#### HTTP API Path in Remote Mode
+
+REST API requests (non-chat) take a different path:
+
+```
+Browser → Vite Dev Proxy (:5173) → remote Agent (:8642)
+           ↑                            ↑
+      /api/hermes/v1/models       VITE_HERMES_GATEWAY_URL
+      /api/hermes/sessions        proxy target
+      /health
+```
+
+Vite proxy forwards matching requests (`/api`, `/v1`, `/health`) to `VITE_HERMES_GATEWAY_URL`. In remote mode, this target is the remote Agent, not local Koa.
+
+#### REST API vs Chat API Path Separation
+
+```
+Request type        Local mode              Remote mode
+──────────────────────────────────────────────────────────
+HTTP REST API       Koa → local Agent       Vite proxy → remote Agent (:8642)
+Socket.IO Chat      Koa → local Agent       Koa fetch → remote Agent (:8642)
 ```
 
 ### Configuration
@@ -287,9 +395,22 @@ The **Settings → Connection** page allows runtime mode switching **without res
 3. Enter remote URL and API Key (required for remote mode)
 4. Click **Save**
 
-When mode changes, the chat run `source` field changes accordingly:
-- Local mode: `source: "cli"` → `handleBridgeRun` (local Agent)
-- Remote mode: `source: "api_server"` → `handleApiRun` (remote Agent)
+**Switch mechanism**:
+
+```
+ConnectionSettings.vue
+  → handleModeChange("local" | "remote")
+  → setServerUrl() / localStorage.removeItem('hermes_server_url')
+  → appStore.syncDeployMode()
+      → deployMode = getBaseUrlValue() ? "remote" : "local"
+      → updates global state
+
+chat.ts store.sendMessage()
+  → const source = appStore.deployMode === 'remote' ? 'api_server' : 'cli'
+  → routing follows [Routing Decision Tree](#routing-decision-tree)
+```
+
+> Restarting the Koa server is **not required** when switching modes. However, in remote mode, ensure the remote Agent is network-reachable and the URL/API Key are correctly configured in `.env` or `localStorage`.
 
 ---
 
@@ -330,63 +451,20 @@ When mode changes, the chat run `source` field changes accordingly:
 
 ### Two-Layer Proxy (Dev Mode)
 
-#### Layer 1: Vite Dev Proxy
+In dev mode, there are **two proxy layers** whose behavior depends on the deployment mode:
 
-Defined in `vite.config.ts`, forwards browser HTTP API requests to Koa:
+| Proxy Layer | Port | Paths | Local target | Remote target | Request types |
+|---|---|---|---|---|---|
+| **Vite proxy** | `:5173` | `/api/*`, `/v1/*`, `/health` | Koa `:8648` | Remote Agent `:8642` | HTTP REST API (models/sessions/logs/jobs) |
+| **Koa proxy** | `:8648` | `/api/hermes/*`, `/v1/*` | GatewayManager `:18765` | Remote Agent `:8642` | Koa internal forwarding (Socket.IO→fetch, backend proxy) |
 
-```javascript
-proxy: {
-  '/api':    { target: 'http://127.0.0.1:8648' },
-  '/v1':     { target: 'http://127.0.0.1:8648' },
-  '/health': { target: 'http://127.0.0.1:8648' },
-}
-```
+> Socket.IO chat connections **bypass** the Vite proxy — browsers connect directly to Koa at `:8648`. Koa's ChatRunSocket then routes according to `deployMode` (local → bridge, remote → API fetch).
 
-Socket.IO connections **bypass** Vite proxy — browsers connect directly to Koa at `:8648`.
+**Path transformation** (Koa proxy):
 
-#### Layer 2: Koa Proxy Middleware
-
-Defined in `packages/server/src/routes/hermes/index.ts`, forwards backend API requests:
-
-- Local mode → `GatewayManager` (:18765)
-- Remote mode → `VITE_HERMES_GATEWAY_URL` (remote Agent)
-
-**Path transformation**:
 ```
 Client request:  /api/hermes/v1/responses
 Koa proxy path:  /v1/responses  (strips /api/hermes prefix)
-```
-
-### Chat Run Flow
-
-#### Local Mode
-
-```
-User sends message
-  → client chat.ts store.sendMessage()
-  → Socket.IO emit('run', { source: "cli", ... })
-  → Koa ChatRunSocket receives event
-  → resolveRunSource() returns "cli"
-  → handleBridgeRun()
-  → AgentBridgeClient.send()
-  → GatewayManager (:18765)
-  → Hermes Agent process
-  → stream results back via Socket.IO events
-```
-
-#### Remote Mode
-
-```
-User sends message
-  → client chat.ts store.sendMessage()
-  → Socket.IO emit('run', { source: "api_server", ... })
-  → Koa ChatRunSocket receives event
-  → resolveRunSource() returns "api_server"
-  → handleApiRun()
-  → POST fetch("http://192.168.0.39:8642/v1/responses")
-  → remote Hermes Agent processes
-  → SSE stream frames parsed
-  → converted to Socket.IO events back to browser
 ```
 
 ---
