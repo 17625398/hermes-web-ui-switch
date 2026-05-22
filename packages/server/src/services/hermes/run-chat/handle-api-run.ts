@@ -25,6 +25,29 @@ import { countTokens, SUMMARY_PREFIX } from '../../../lib/context-compressor'
 import { getCompressionSnapshot } from '../../../db/hermes/compression-snapshot'
 import type { ContentBlock, SessionState, ChatRunSource } from './types'
 
+function isRemoteConnectionError(err: any): boolean {
+  if (!err) return false
+  const msg = (err.message || '').toLowerCase()
+  const code = (err.code || '').toUpperCase()
+  const cause = err.cause
+  const causeMsg = cause?.message || cause?.code || ''
+  return msg.includes('fetch failed')
+    || msg.includes('econnrefused')
+    || msg.includes('enotfound')
+    || msg.includes('etimedout')
+    || msg.includes('econnreset')
+    || msg.includes('network error')
+    || msg.includes('unable to connect')
+    || msg.includes('dns')
+    || msg.includes('getaddrinfo')
+    || code === 'ECONNREFUSED'
+    || code === 'ENOTFOUND'
+    || code === 'ETIMEDOUT'
+    || code === 'ECONNRESET'
+    || String(causeMsg).includes('econnrefused')
+    || String(causeMsg).includes('enotfound')
+}
+
 export function resolveRunSource(source?: string, _sessionId?: string): ChatRunSource {
   const resolved = (source === 'api_server') ? 'api_server' : 'cli'
   logger.info('[deploy-mode] resolveRunSource: client source=%s → resolved=%s session=%s', source, resolved, _sessionId || '(new)')
@@ -347,8 +370,12 @@ export async function handleApiRun(
         }, '[chat-run-socket] suppressing stale/aborted API stream error')
         return
       }
+      const upstreamLabel = upstream ? `(${upstream})` : ''
+      const friendlyError = isRemoteConnectionError(err)
+        ? `Cannot reach the remote Agent ${upstreamLabel}. Please verify the address in Connection Settings and ensure the remote server is running.`
+        : err.message
       void markApiCompleted(nsp, socket, session_id, sessionMap, { event: 'run.failed' }).then(() => {
-        emit('run.failed', { event: 'run.failed', error: err.message, queue_remaining: queueLen })
+        emit('run.failed', { event: 'run.failed', error: friendlyError, queue_remaining: queueLen })
         if (queueLen > 0) dequeueNextQueuedRun(socket, session_id)
       })
     } else {

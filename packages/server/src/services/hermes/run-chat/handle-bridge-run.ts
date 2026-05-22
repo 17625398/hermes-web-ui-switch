@@ -30,6 +30,24 @@ import { filterBridgeToolCallMarkupDelta } from './bridge-delta'
 
 const BRIDGE_USAGE_FLUSH_DELAY_MS = 200
 
+/** Detect network-level bridge connection errors */
+function isBridgeConnectError(err: any): boolean {
+  if (!err) return false
+  const msg = (err.message || '').toLowerCase()
+  const code = (err.code || '').toUpperCase()
+  return msg.includes('econnrefused')
+    || msg.includes('econnreset')
+    || msg.includes('epipe')
+    || msg.includes('etimedout')
+    || msg.includes('socket closed')
+    || msg.includes('connection reset')
+    || code === 'ECONNREFUSED'
+    || code === 'ECONNRESET'
+    || code === 'EPIPE'
+    || code === 'ETIMEDOUT'
+    || code === 'ENOENT'
+}
+
 export async function handleBridgeRun(
   nsp: ReturnType<Server['of']>,
   socket: Socket,
@@ -200,7 +218,11 @@ export async function handleBridgeRun(
     state.bridgePendingToolCallMarkup = undefined
     flushBridgePendingToDb(state, session_id)
     updateSessionStats(session_id)
-    const message = err instanceof Error ? err.message : String(err)
+    const rawMessage = err instanceof Error ? err.message : String(err)
+    const isBridgeConnectionError = isBridgeConnectError(err)
+    const message = isBridgeConnectionError
+      ? 'Cannot reach the local Hermes gateway. Make sure it is running (hermes gateway start) or switch to Remote mode in Connection Settings.'
+      : rawMessage
     emit('run.failed', { event: 'run.failed', error: message, queue_remaining: queueLen })
     const errUsage = await calcAndUpdateUsage(session_id, state, emit)
     updateUsage(session_id, {
