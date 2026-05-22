@@ -223,8 +223,8 @@ async function testConnection() {
       testConnectionMessage.value = 'health 正常，验证 responses 端点…';
       let responsesUrl: string;
       if (import.meta.env.DEV) {
-        // In dev mode, VITE_HERMES_GATEWAY_URL is set, we need to call the real upstream
-        responsesUrl = `/api/proxy/v1/responses?test=1`;
+        // Vite 代理已配置将 /v1/* 转发到 VITE_HERMES_GATEWAY_URL
+        responsesUrl = `/v1/responses`;
       } else {
         responsesUrl = `${url}/v1/responses`;
       }
