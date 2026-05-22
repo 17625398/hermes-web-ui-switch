@@ -187,6 +187,8 @@ backup/hermes-web-ui-switch/
     └── server/
         └── src/
             ├── index.ts                       # Koa 入口（添加 .env 加载器）
+            ├── services/hermes/run-chat/
+            │   └── handle-api-run.ts          # Socket.IO 运行处理器（远程上游支持）
             └── routes/hermes/
                 └── proxy-handler.ts           # 代理中间件（远程上游支持）
 ```
@@ -199,12 +201,14 @@ backup/hermes-web-ui-switch/
 | group-chat.ts | `packages/client/src/api/hermes/` | 群聊 Socket.IO 客户端连接，同上直连 Koa |
 | vite.config.ts | 项目根目录 | Vite 代理配置，移除了 `/socket.io` 规则 |
 | index.ts (服务端) | `packages/server/src/` | Koa 入口，添加 .env 文件自动加载 |
+| handle-api-run.ts | `packages/server/src/services/hermes/run-chat/` | Socket.IO 运行处理器，`resolveRunSource` 尊重 client source，upstream 从环境变量读取 |
 | proxy-handler.ts | `packages/server/src/routes/hermes/` | 代理中间件，`resolveUpstream()` 优先使用 `VITE_HERMES_GATEWAY_URL` |
 | main.ts | `packages/client/src/` | 开发模式 localStorage 初始化，仅无值时设置默认值 |
 | client.ts | `packages/client/src/api/` | API 客户端配置，包含开发模式代理和服务器地址管理 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 连接设置组件，包含本地/分离部署模式切换功能 |
 | SettingsView.vue | `packages/client/src/views/hermes/` | 设置页面主视图，包含连接标签页配置 |
 | session-display.ts | `packages/client/src/shared/` | 会话 source 标签：`cli` → 本地会话，`api_server` → 分离部署会话 |
+| chat.ts (store) | `packages/client/src/stores/hermes/` | 远程模式发送 `source='api_server'`，Socket.IO 路由到 handleApiRun 走代理 |
 | app.ts (store) | `packages/client/src/stores/hermes/` | Pinia 应用状态，新增 `deployMode` + `syncDeployMode()` 供全局响应式使用 |
 | ChatPanel.vue | `packages/client/src/components/hermes/chat/` | 对话面板头部部署模式徽标 + 侧栏会话按 `source` 分组显示 |
 | ConnectionSettings.vue | `packages/client/src/components/hermes/settings/` | 改为使用 `appStore.deployMode`，移除本地 deployMode ref |
@@ -347,6 +351,8 @@ copy "<BACKUP_DIR>\packages\client\src\api\client.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\api\"
 copy "<BACKUP_DIR>\packages\client\src\shared\session-display.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\shared\"
+copy "<BACKUP_DIR>\packages\client\src\stores\hermes\chat.ts" `
+     "<HERMES_WEB_UI_DIR>\packages\client\src\stores\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\stores\hermes\app.ts" `
      "<HERMES_WEB_UI_DIR>\packages\client\src\stores\hermes\"
 copy "<BACKUP_DIR>\packages\client\src\main.ts" `
@@ -368,6 +374,8 @@ copy "<BACKUP_DIR>\packages\client\src\i18n\locales\en.ts" `
 
 copy "<BACKUP_DIR>\packages\server\src\index.ts" `
      "<HERMES_WEB_UI_DIR>\packages\server\src\"
+copy "<BACKUP_DIR>\packages\server\src\services\hermes\run-chat\handle-api-run.ts" `
+     "<HERMES_WEB_UI_DIR>\packages\server\src\services\hermes\run-chat\"
 copy "<BACKUP_DIR>\packages\server\src\routes\hermes\proxy-handler.ts" `
      "<HERMES_WEB_UI_DIR>\packages\server\src\routes\hermes\"
 
