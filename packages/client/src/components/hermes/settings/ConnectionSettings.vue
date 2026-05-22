@@ -200,30 +200,93 @@ async function testConnection() {
         headers['Authorization'] = `Bearer ${apiKey.value.trim()}`;
         console.log('[ConnectionSettings] testConnection - using API key');
       }
+
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: headers,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.error('[ConnectionSettings] testConnection - health failed:', response.status, text);
+        testConnectionResult.value = 'error';
+        testConnectionMessage.value = `${t("settings.connection.testFailed")}: ${response.status} - ${text || response.statusText}`;
+        message.error(testConnectionMessage.value);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[ConnectionSettings] testConnection - health success:', data);
+
+      // Step 2: Verify /v1/responses endpoint
+      testConnectionMessage.value = 'health 正常，验证 responses 端点…';
+      let responsesUrl: string;
+      if (import.meta.env.DEV) {
+        // In dev mode, VITE_HERMES_GATEWAY_URL is set, we need to call the real upstream
+        responsesUrl = `/api/proxy/v1/responses?test=1`;
+      } else {
+        responsesUrl = `${url}/v1/responses`;
+      }
+
+      try {
+        const respCheck = await fetch(responsesUrl, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: 'test', stream: false, max_output_tokens: 1 }),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (respCheck.ok) {
+          testConnectionResult.value = 'success';
+          testConnectionMessage.value = t("settings.connection.testSuccess");
+          message.success(t("settings.connection.testSuccess"));
+        } else if (respCheck.status === 401 || respCheck.status === 403) {
+          testConnectionResult.value = 'error';
+          testConnectionMessage.value = '远程 Agent 拒绝访问（401/403）。请检查 API Key 是否正确。';
+          message.error(testConnectionMessage.value);
+        } else {
+          testConnectionResult.value = 'error';
+          testConnectionMessage.value = `远程 responses 端点返回 ${respCheck.status}。请确认远程 Agent 已启用 /v1/responses。`;
+          message.error(testConnectionMessage.value);
+        }
+      } catch {
+        testConnectionResult.value = 'error';
+        testConnectionMessage.value = `远程 Agent 的 /v1/responses 不可达。请确认地址 ${url} 正确且 Agent 已启动。`;
+        message.error(testConnectionMessage.value);
+      }
     } else {
-      // 本地模式：测试 Koa 连通性（/health 公开端点，直连不走 Vite 代理）
+      // 本地模式：测试 Koa + gateway
       testUrl = `${koaBaseUrl()}/health`;
       console.log('[ConnectionSettings] testConnection - testing local at', testUrl);
-    }
 
-    const response = await fetch(testUrl, {
-      method: 'GET',
-      headers: headers,
-      signal: AbortSignal.timeout(10000),
-    });
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        headers: headers,
+        signal: AbortSignal.timeout(10000),
+      });
 
-    if (response.ok) {
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.error('[ConnectionSettings] testConnection - failed:', response.status, text);
+        testConnectionResult.value = 'error';
+        testConnectionMessage.value = `${t("settings.connection.testFailed")}: ${response.status} - ${text || response.statusText}`;
+        message.error(testConnectionMessage.value);
+        return;
+      }
+
       const data = await response.json();
-      console.log('[ConnectionSettings] testConnection - success:', data);
-      testConnectionResult.value = 'success';
-      testConnectionMessage.value = t("settings.connection.testSuccess");
-      message.success(t("settings.connection.testSuccess"));
-    } else {
-      const text = await response.text().catch(() => '');
-      console.error('[ConnectionSettings] testConnection - failed:', response.status, text);
-      testConnectionResult.value = 'error';
-      testConnectionMessage.value = `${t("settings.connection.testFailed")}: ${response.status} - ${text || response.statusText}`;
-      message.error(testConnectionMessage.value);
+      console.log('[ConnectionSettings] testConnection - health success:', data);
+
+      // Step 2: Check gateway status from health response
+      if (data.gateway === 'running') {
+        testConnectionResult.value = 'success';
+        testConnectionMessage.value = t("settings.connection.testSuccess") + '（Gateway 运行中）';
+        message.success(testConnectionMessage.value);
+      } else {
+        testConnectionResult.value = 'error';
+        testConnectionMessage.value = `Koa 服务正常，但 Hermes Gateway 未运行。请启动 gateway（hermes gateway start）。Gateway 详情: ${data.gateway_detail || '无'}`;
+        message.error(testConnectionMessage.value);
+      }
     }
   } catch (error: any) {
     console.error('[ConnectionSettings] testConnection - error:', error);
@@ -328,6 +391,8 @@ async function testConnection() {
       <div v-if="localHealthLoading" class="local-hint">正在检查 Koa 连接…</div>
       <div v-else-if="localHealthOk" class="local-hint" style="background: rgba(16,185,129,0.1); color: #10b981;">
         Koa 服务正常
+        <span v-if="appStore.gatewayConnected" style="margin-left:8px;">· Gateway 运行中</span>
+        <span v-else style="margin-left:8px; color:#ef4444;">· Gateway 未运行</span>
       </div>
       <div v-else class="local-hint" style="background: rgba(239,68,68,0.1); color: #ef4444;">
         Koa 服务不可达（127.0.0.1:8648），请确认后端已启动

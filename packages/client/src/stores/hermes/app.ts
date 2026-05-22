@@ -27,6 +27,8 @@ export const useAppStore = defineStore('app', () => {
 
   const deployMode = ref<"local" | "remote">(getBaseUrlValue() ? "remote" : "local")
   const connected = ref(false)
+  const gatewayConnected = ref(false)
+  const bridgeConnected = ref(false)
   const serverVersion = ref(WEB_UI_VERSION)
   const latestVersion = ref('')
   const updateAvailable = ref(false)
@@ -74,6 +76,8 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await checkHealth()
       connected.value = res.status === 'ok'
+      gatewayConnected.value = res.gateway === 'running'
+      bridgeConnected.value = res.bridge === 'running'
       if (res.webui_version) serverVersion.value = res.webui_version
       clientOutdated.value = !!res.webui_version && res.webui_version !== WEB_UI_VERSION
       if (res.webui_latest) latestVersion.value = res.webui_latest
@@ -81,6 +85,8 @@ export const useAppStore = defineStore('app', () => {
       if (res.node_version) nodeVersion.value = res.node_version
     } catch {
       connected.value = false
+      gatewayConnected.value = false
+      bridgeConnected.value = false
       clientOutdated.value = false
     }
   }
@@ -301,6 +307,8 @@ export const useAppStore = defineStore('app', () => {
     deployMode,
     syncDeployMode,
     connected,
+    gatewayConnected,
+    bridgeConnected,
     serverVersion,
     latestVersion,
     nodeVersion,

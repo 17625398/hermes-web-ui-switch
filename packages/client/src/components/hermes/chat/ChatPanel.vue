@@ -71,6 +71,10 @@ function handleMobileChange(e: MediaQueryListEvent | MediaQueryList) {
   }
 }
 
+function navigateToSettings() {
+  window.location.href = '/settings'
+}
+
 onMounted(() => {
   mobileQuery = window.matchMedia("(max-width: 768px)");
   handleMobileChange(mobileQuery);
@@ -95,6 +99,27 @@ const profileFilterOptions = computed(() => [
     value: profile.name,
   })),
 ]);
+
+const connectionHealthClass = computed(() => {
+  if (appStore.deployMode === 'local') {
+    if (!appStore.connected) return 'disconnected'
+    if (!appStore.gatewayConnected) return 'warning'
+    return 'connected'
+  }
+  // remote
+  if (!appStore.connected) return 'disconnected'
+  return 'connected'
+})
+
+const connectionBadgeTitle = computed(() => {
+  if (appStore.deployMode === 'local') {
+    if (!appStore.connected) return 'Web UI 后端未连接'
+    if (!appStore.gatewayConnected) return 'Hermes Gateway 未运行'
+    return t('settings.connection.localMode') + ' — 正常'
+  }
+  if (!appStore.connected) return '远程 Agent 未连接'
+  return t('settings.connection.remoteMode') + ' — 正常'
+})
 
 async function handleProfileFilterChange(value: string) {
   chatStore.sessionProfileFilter = value === "__all__" ? null : value;
@@ -1109,10 +1134,10 @@ async function handleSessionModelCustomSubmit() {
           >
           <span
             class="deploy-mode-badge"
-            :class="appStore.deployMode"
-            :title="appStore.deployMode === 'remote' ? t('settings.connection.remoteMode') : t('settings.connection.localMode')"
+            :class="[appStore.deployMode, connectionHealthClass]"
+            :title="connectionBadgeTitle"
           >
-            <span class="mode-dot"></span>
+            <span class="mode-dot" :class="connectionHealthClass"></span>
             {{ appStore.deployMode === 'remote' ? t('settings.connection.remoteMode') : t('settings.connection.localMode') }}
           </span>
         </div>
@@ -1189,6 +1214,25 @@ async function handleSessionModelCustomSubmit() {
           </template>
         </div>
       </header>
+
+      <!-- Connection warning banner -->
+      <div
+        v-if="connectionHealthClass === 'warning' || connectionHealthClass === 'disconnected'"
+        class="connection-warning-banner"
+        :class="connectionHealthClass"
+      >
+        <template v-if="appStore.deployMode === 'local' && !appStore.connected">
+          Web UI 后端连接失败。请检查服务器是否在 127.0.0.1:8648 运行。
+        </template>
+        <template v-else-if="appStore.deployMode === 'local' && !appStore.gatewayConnected">
+          Hermes Gateway 未运行。请执行 <code>hermes gateway start</code> 或在
+          <a href="/settings" @click.prevent="navigateToSettings">连接设置</a>中切换到远程模式。
+        </template>
+        <template v-else-if="appStore.deployMode === 'remote' && !appStore.connected">
+          远程 Agent 连接失败。请检查
+          <a href="/settings" @click.prevent="navigateToSettings">连接设置</a>中的地址和 API Key。
+        </template>
+      </div>
 
       <template v-if="currentMode === 'chat'">
         <div class="chat-content-wrapper">
@@ -1927,6 +1971,7 @@ async function handleSessionModelCustomSubmit() {
     height: 6px;
     border-radius: 50%;
     display: inline-block;
+    transition: background 0.3s;
 
     .local & {
       background: #10b981;
@@ -1935,6 +1980,58 @@ async function handleSessionModelCustomSubmit() {
     .remote & {
       background: #3b82f6;
     }
+
+    &.connected {
+      background: #10b981;
+      box-shadow: 0 0 4px rgba(16,185,129,0.5);
+    }
+    &.warning {
+      background: #f59e0b;
+      box-shadow: 0 0 4px rgba(245,158,11,0.5);
+      animation: pulse-warning 2s infinite;
+    }
+    &.disconnected {
+      background: #ef4444;
+      box-shadow: 0 0 4px rgba(239,68,68,0.5);
+    }
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.connection-warning-banner {
+  padding: 8px 16px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  }
+
+  &.disconnected {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  code {
+    font-size: 11px;
+    padding: 1px 4px;
+    background: rgba(0,0,0,0.06);
+    border-radius: 3px;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 }
 
