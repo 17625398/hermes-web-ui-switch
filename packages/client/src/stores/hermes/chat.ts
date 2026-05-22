@@ -976,6 +976,11 @@ export const useChatStore = defineStore('chat', () => {
         queue_id: userMsg.id,
         source: appStore.deployMode === 'remote' ? 'api_server' as const : 'cli' as const,
       }
+      // Sync session source with current deploy mode so session list grouping
+      // and UI flags (e.g. isBridgeSession) reflect the actual routing mode.
+      if (activeSession.value && activeSession.value.source !== runPayload.source) {
+        activeSession.value.source = runPayload.source
+      }
       if (shouldSendInitialSessionConfig && activeSession.value) {
         activeSession.value.messageCount = Math.max(activeSession.value.messageCount || 0, 1)
       }
