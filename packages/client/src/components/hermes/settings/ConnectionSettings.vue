@@ -209,7 +209,7 @@ async function testConnection() {
     const response = await fetch(testUrl, {
       method: 'GET',
       headers: headers,
-      timeout: 10000,
+      signal: AbortSignal.timeout(10000),
     });
 
     if (response.ok) {

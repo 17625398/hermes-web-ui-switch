@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client'
-import { getBaseUrl, getApiKey } from '../client'
+import { getApiKey } from '../client'
 
 export type ContentBlock =
   | { type: 'text'; text: string }
