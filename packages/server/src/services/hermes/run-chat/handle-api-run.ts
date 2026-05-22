@@ -26,7 +26,9 @@ import { getCompressionSnapshot } from '../../../db/hermes/compression-snapshot'
 import type { ContentBlock, SessionState, ChatRunSource } from './types'
 
 export function resolveRunSource(source?: string, _sessionId?: string): ChatRunSource {
-  return (source === 'api_server') ? 'api_server' : 'cli'
+  const resolved = (source === 'api_server') ? 'api_server' : 'cli'
+  logger.info('[deploy-mode] resolveRunSource: client source=%s → resolved=%s session=%s', source, resolved, _sessionId || '(new)')
+  return resolved
 }
 
 export async function loadSessionStateFromDb(sid: string, _sessionMap: Map<string, SessionState>): Promise<SessionState> {
@@ -90,6 +92,10 @@ export async function handleApiRun(
 
   const upstream = process.env.VITE_HERMES_GATEWAY_URL || ''
   const apiKey = upstream ? process.env.VITE_HERMES_GATEWAY_API_KEY || undefined : undefined
+
+  logger.info('[deploy-mode][REMOTE API] handling run session=%s upstream=%s hasApiKey=%s input=%s',
+    session_id || '(new)', upstream || '(none)', !!apiKey,
+    typeof input === 'string' ? input.slice(0, 80) : '[content blocks]')
 
   const runMarker = session_id
     ? `resp_run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
