@@ -19,7 +19,7 @@ import { handleBridgeRun } from './handle-bridge-run'
 import { handleAbort } from './abort'
 import { getOrCreateSession } from './compression'
 import { handleSessionCommand, isSessionCommand, parseSessionCommand } from './session-command'
-import type { ContentBlock, QueuedRun, SessionState } from './types'
+import type { ChatRunSource, ContentBlock, QueuedRun, SessionState } from './types'
 
 export type { ContentBlock } from './types'
 
@@ -84,9 +84,9 @@ export class ChatRunSocket {
       logger.info('[deploy-mode][socket] run event received from client: session=%s source=%s model=%s',
         data.session_id || '(new)', data.source, data.model || '(default)')
       const runProfile = resolveRunProfile(data.session_id, data.profile)
+      const source = resolveRunSource(data.source, data.session_id)
       if (data.session_id) {
         const state = getOrCreateSession(this.sessionMap, data.session_id)
-        const source = resolveRunSource(data.source, data.session_id)
         const command = parseSessionCommand(data.input)
         if (command && source === 'cli') {
           try {
@@ -135,7 +135,7 @@ export class ChatRunSocket {
         state.source = source
       }
       try {
-        await this.handleRun(socket, data, runProfile)
+        await this.handleRun(socket, data, runProfile, false, source)
       } catch (err) {
         if (data.session_id) {
           const state = this.sessionMap.get(data.session_id)
@@ -218,8 +218,9 @@ export class ChatRunSocket {
     },
     profile: string,
     skipUserMessage = false,
+    source?: ChatRunSource,
   ) {
-    const source = resolveRunSource(data.source, data.session_id)
+    if (!source) source = resolveRunSource(data.source, data.session_id)
     const inputPreview = typeof data.input === 'string' ? data.input.slice(0, 60) : '[content blocks]'
     logger.info('[deploy-mode] handleRun session=%s clientSource=%s resolved=%s mode=%s input=%s',
       data.session_id || '(new)', data.source, source,
@@ -305,8 +306,7 @@ export class ChatRunSocket {
       provider: next.provider,
       model_groups: next.model_groups,
       instructions: next.instructions,
-      source: next.source,
-    }, next.profile || fallbackProfile, true)
+    }, next.profile || fallbackProfile, true, next.source)
   }
 
   // --- Helpers ---
